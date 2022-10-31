@@ -1,0 +1,8 @@
+pytorch-lightning==1.7.7
+omegaconf==2.2.3
+matplotlib
+opencv-python
+imageio
+imageio-ffmpeg
+scipy
+PyMCubes

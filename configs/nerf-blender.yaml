@@ -1,0 +1,101 @@
+name: nerf-blender-${dataset.scene}
+tag: ''
+seed: 42
+
+dataset:
+  name: blender
+  scene: ???
+  root_dir: ./load/nerf_synthetic/${dataset.scene}
+  img_wh:
+    - ${system.resolution}
+    - ${system.resolution}
+  near_plane: 2.0
+  far_plane: 6.0
+  white_bkgd: true
+  spheric_poses: false
+  use_pixel_centers: true
+  train_split: 'train'
+  val_split: 'val'
+  test_split: 'test'
+
+model:
+  name: nerf
+  radius: 1.5
+  render_step_size: 5.e-3
+  num_samples_per_ray: 1024
+  train_num_rays: 256
+  max_train_num_rays: 8192
+  grid_prune: true
+  dynamic_ray_sampling: true
+  batch_image_sampling: true
+  randomized: true
+  ray_chunk: 32768
+  geometry:
+    name: volume-density
+    radius: ${model.radius}
+    feature_dim: 16
+    density_activation: trunc_exp
+    density_bias: -1
+    isosurface:
+      method: mc
+      resolution: 512
+      chunk: 2097152
+      threshold: 5.0
+    xyz_encoding_config:
+      otype: HashGrid
+      n_levels: 16
+      n_features_per_level: 2
+      log2_hashmap_size: 19
+      base_resolution: 16
+      per_level_scale: 1.447269237440378  
+    mlp_network_config:
+      otype: FullyFusedMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 64
+      n_hidden_layers: 1
+  texture:
+    name: volume-radiance
+    input_feature_dim: ${model.geometry.feature_dim}
+    dir_encoding_config:
+      otype: SphericalHarmonics
+      degree: 4    
+    mlp_network_config:
+      otype: FullyFusedMLP
+      activation: ReLU
+      output_activation: Sigmoid
+      n_neurons: 64
+      n_hidden_layers: 2
+  
+system:
+  name: nerf-system
+  resolution: 800
+  loss:
+    lambda_rgb: 1.
+    lambda_opaque: 0.
+  optimizer:
+    name: Adam
+    args:
+      lr: 0.01
+      betas: [0.9, 0.99]
+      eps: 1.e-15
+  scheduler:
+    name: MultiStepLR
+    interval: step
+    args:
+      milestones: [10000, 15000, 18000]
+      gamma: 0.33
+
+checkpoint:
+  save_top_k: -1
+  every_n_train_steps: ${trainer.max_steps}
+
+trainer:
+  max_steps: 20000
+  log_every_n_steps: 200
+  num_sanity_val_steps: 0
+  val_check_interval: 10000
+  limit_train_batches: 1.0
+  limit_val_batches: 0.02
+  enable_progress_bar: true 
+  precision: 16
