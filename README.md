@@ -66,3 +66,7 @@ All experiments are conducted on a single NVIDIA RTX3090.
 - [ ] Support background model based on NeRF++ or Mip-NeRF360
 - [ ] Support GUI training and interaction
 - [ ] More illustrations about the framework
+
+## Related Projects
+- [ngp_pl](https://github.com/kwea123/ngp_pl): Great Instant-NGP implementation in PyTorch-Lightning! Background model and GUI supported.
+- [Instant-NSR](https://github.com/zhaofuq/Instant-NSR): NeuS implementation using multiresolution hash encoding.
