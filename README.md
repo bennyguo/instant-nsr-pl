@@ -21,7 +21,6 @@ This repository contains a concise and extensible implementation of NeRF and Neu
 ### Environments
 - Install PyTorch>=1.10 [here](https://pytorch.org/get-started/locally/) based the package management tool you used and your cuda version (older PyTorch versions may work but have not been tested)
 - Install tiny-cuda-nn PyTorch extension: `pip install git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch`
-- Install my fork of nerfacc (with support for NeuS training): `pip install git+https://github.com/bennyguo/nerfacc/`
 - `pip install -r requirements.txt`
 
 

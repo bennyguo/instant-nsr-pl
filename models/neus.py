@@ -6,7 +6,7 @@ import models
 from models.base import BaseModel
 from models.utils import chunk_batch
 from systems.utils import update_module_step
-from nerfacc import ContractionType, OccupancyGrid, ray_marching_alpha, rendering_alpha
+from nerfacc import ContractionType, OccupancyGrid, ray_marching, rendering
 
 
 class VarianceNetwork(nn.Module):
@@ -121,7 +121,7 @@ class NeuSModel(BaseModel):
             return rgb, alpha[...,None]
 
         with torch.no_grad():
-            packed_info, t_starts, t_ends = ray_marching_alpha(
+            packed_info, t_starts, t_ends = ray_marching(
                 rays_o, rays_d,
                 scene_aabb=self.scene_aabb,
                 grid=self.occupancy_grid if self.config.grid_prune else None,
@@ -133,11 +133,11 @@ class NeuSModel(BaseModel):
                 alpha_thre=0.0
             )
 
-        rgb, opacity, depth = rendering_alpha(
-            rgb_alpha_fn,
+        rgb, opacity, depth = rendering(
             packed_info,
             t_starts,
             t_ends,
+            rgb_alpha_fn=rgb_alpha_fn,
             render_bkgd=self.background_color,
         )
 

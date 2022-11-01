@@ -73,10 +73,10 @@ class NeRFModel(BaseModel):
             )   
 
         rgb, opacity, depth = rendering(
-            rgb_sigma_fn,
             packed_info,
             t_starts,
             t_ends,
+            rgb_sigma_fn=rgb_sigma_fn,
             render_bkgd=self.background_color
         )
 
