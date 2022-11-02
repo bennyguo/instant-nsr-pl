@@ -1,5 +1,5 @@
 name: neus-blender-${dataset.scene}
-tag: 'cos_anneal${model.cos_anneal_end}-grad_${model.geometry.grad_type}-lr${system.optimizer.params.variance.lr}-mask${system.loss.lambda_mask}'
+tag: ''
 seed: 42
 
 dataset:
