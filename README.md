@@ -48,7 +48,7 @@ python launch.py --config configs/nerf-blender.yaml --gpu 0 --train dataset.scen
 ### Testing
 The training precedure are by default followed by testing, which computes metrics on test data, generates animations and exports the geometry as triangular meshes. If you want to do testing alone, just resume the pretrained model and replace `--train` with `--test`, for example:
 ```bash
-python launch.py --config path/to/your/exp/config/parsed.yaml --resume path/to/your/exp/ckpt/epoch=0-step=20000 --gpu 0 --test
+python launch.py --config path/to/your/exp/config/parsed.yaml --resume path/to/your/exp/ckpt/epoch=0-step=20000.ckpt --gpu 0 --test
 ```
 
 
