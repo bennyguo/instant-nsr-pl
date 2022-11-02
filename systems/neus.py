@@ -163,8 +163,13 @@ class NeuSSystem(BaseSystem):
         if self.trainer.is_global_zero:
             out_set = {}
             for step_out in out:
-                for oi, index in enumerate(step_out['index']):
-                    out_set[index[0].item()] = {'psnr': step_out['psnr'][oi]}
+                # DP
+                if step_out['index'].ndim == 1:
+                    out_set[step_out['index'].item()] = {'psnr': step_out['psnr']}
+                # DDP
+                else:
+                    for oi, index in enumerate(step_out['index']):
+                        out_set[index[0].item()] = {'psnr': step_out['psnr'][oi]}
             psnr = torch.mean(torch.stack([o['psnr'] for o in out_set.values()]))
             self.log('val/psnr', psnr, prog_bar=True, rank_zero_only=True)         
 
@@ -195,8 +200,13 @@ class NeuSSystem(BaseSystem):
         if self.trainer.is_global_zero:
             out_set = {}
             for step_out in out:
-                for oi, index in enumerate(step_out['index']):
-                    out_set[index[0].item()] = {'psnr': step_out['psnr'][oi]}
+                # DP
+                if step_out['index'].ndim == 1:
+                    out_set[step_out['index'].item()] = {'psnr': step_out['psnr']}
+                # DDP
+                else:
+                    for oi, index in enumerate(step_out['index']):
+                        out_set[index[0].item()] = {'psnr': step_out['psnr'][oi]}
             psnr = torch.mean(torch.stack([o['psnr'] for o in out_set.values()]))
             self.log('test/psnr', psnr, prog_bar=True, rank_zero_only=True)    
 

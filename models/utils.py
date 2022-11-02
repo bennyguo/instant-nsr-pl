@@ -67,7 +67,8 @@ trunc_exp = _TruncExp.apply
 
 
 def get_activation(name):
-    if name is None or name in ['none', 'None']:
+    name = name.lower()
+    if name is None or name == 'none':
         return nn.Identity()
     elif name.startswith('scale'):
         scale_factor = float(name[5:])

@@ -8,6 +8,7 @@ import tinycudann as tcnn
 from pytorch_lightning.utilities.rank_zero import rank_zero_debug, _get_rank
 
 from utils.misc import config_to_primitive
+from models.utils import get_activation
 
 
 
@@ -69,9 +70,12 @@ class VanillaMLP(nn.Module):
             self.layers += [self.make_linear(self.n_neurons, self.n_neurons, is_first=False, is_last=False), self.make_activation()]
         self.layers += [self.make_linear(self.n_neurons, dim_out, is_first=False, is_last=True)]
         self.layers = nn.Sequential(*self.layers)
+        self.output_activation = get_activation(config['output_activation'])
     
     def forward(self, x):
-        return self.layers(x.float())
+        x = self.layers(x.float())
+        x = self.output_activation(x)
+        return x
     
     def make_linear(self, dim_in, dim_out, is_first, is_last):
         layer = nn.Linear(dim_in, dim_out, bias=False)

@@ -1,3 +1,4 @@
+import sys
 import argparse
 import os
 import time
@@ -87,13 +88,20 @@ def main():
             TensorBoardLogger(args.runs_dir, name=config.name, version=config.trial_name),
             CSVLogger(config.exp_dir, name=config.trial_name, version='csv_logs')
         ]
-
+    
+    if sys.platform == 'win32':
+        # does not support multi-gpu on windows
+        strategy = 'dp'
+        assert n_gpus == 1
+    else:
+        strategy = 'ddp_find_unused_parameters_false'
+    
     trainer = Trainer(
         devices=n_gpus,
         accelerator='gpu',
         callbacks=callbacks,
         logger=loggers,
-        strategy='ddp_find_unused_parameters_false',
+        strategy=strategy,
         **config.trainer
     )
 
