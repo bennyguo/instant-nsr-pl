@@ -37,6 +37,7 @@ class NeuSModel(BaseModel):
             )
         self.randomized = self.config.randomized
         self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
+        self.render_step_size = 1.732 * 2 * self.config.radius / self.config.num_samples_per_ray
     
     def update_step(self, epoch, global_step):
         # progressive viewdir PE frequencies
@@ -49,8 +50,8 @@ class NeuSModel(BaseModel):
             sdf = self.geometry(x, with_grad=False, with_feature=False)
             inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
             inv_s = inv_s.expand(sdf.shape[0], 1)
-            estimated_next_sdf = sdf[...,None] - self.config.render_step_size * 0.5
-            estimated_prev_sdf = sdf[...,None] + self.config.render_step_size * 0.5
+            estimated_next_sdf = sdf[...,None] - self.render_step_size * 0.5
+            estimated_prev_sdf = sdf[...,None] + self.render_step_size * 0.5
             prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
             next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
             p = prev_cdf - next_cdf
@@ -127,7 +128,7 @@ class NeuSModel(BaseModel):
                 grid=self.occupancy_grid if self.config.grid_prune else None,
                 alpha_fn=alpha_fn,
                 near_plane=None, far_plane=None,
-                render_step_size=self.config.render_step_size,
+                render_step_size=self.render_step_size,
                 stratified=self.randomized,
                 cone_angle=0.0,
                 alpha_thre=0.0

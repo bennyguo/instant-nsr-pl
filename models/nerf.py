@@ -22,6 +22,7 @@ class NeRFModel(BaseModel):
             )
         self.randomized = self.config.randomized
         self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
+        self.render_step_size = 1.732 * 2 * self.config.radius / self.config.num_samples_per_ray
     
     def update_step(self, epoch, global_step):
         # progressive viewdir PE frequencies
@@ -29,8 +30,8 @@ class NeRFModel(BaseModel):
 
         def occ_eval_fn(x):
             density, _ = self.geometry(x)
-            # approximate for 1 - torch.exp(-density[...,None] * self.config.render_step_size) based on taylor series
-            return density[...,None] * self.config.render_step_size
+            # approximate for 1 - torch.exp(-density[...,None] * self.render_step_size) based on taylor series
+            return density[...,None] * self.render_step_size
         
         if self.training and self.config.grid_prune:
             self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn)
@@ -66,7 +67,7 @@ class NeRFModel(BaseModel):
                 grid=self.occupancy_grid if self.config.grid_prune else None,
                 sigma_fn=sigma_fn,
                 near_plane=None, far_plane=None,
-                render_step_size=self.config.render_step_size,
+                render_step_size=self.render_step_size,
                 stratified=self.randomized,
                 cone_angle=0.0,
                 alpha_thre=0.0
