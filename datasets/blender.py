@@ -19,6 +19,7 @@ class BlenderDatasetBase():
     def setup(self, config, split):
         self.config = config
         self.split = split
+        self.rank = _get_rank()
 
         with open(os.path.join(self.config.root_dir, f"transforms_{self.split}.json"), 'r') as f:
             meta = json.load(f)
@@ -29,10 +30,7 @@ class BlenderDatasetBase():
             W, H = 800, 800
 
         w, h = self.config.img_wh
-        if isinstance(w, float):
-            w = int(w * W)
-        if isinstance(h, float):
-            h = int(h * H)
+        assert round(W / w * h) == H
         
         self.w, self.h = w, h
 
@@ -40,10 +38,9 @@ class BlenderDatasetBase():
 
         self.focal = 0.5 * w / math.tan(0.5 * meta['camera_angle_x']) # scaled focal length
 
-        self.rank = _get_rank()
         # ray directions for all pixels, same for all images (same H, W, focal)
         self.directions = \
-            get_ray_directions(self.h, self.w, self.focal, self.config.use_pixel_centers).to(self.rank) # (h, w, 3)           
+            get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2, self.config.use_pixel_centers).to(self.rank) # (h, w, 3)           
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 
@@ -57,10 +54,7 @@ class BlenderDatasetBase():
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
 
             self.all_fg_masks.append(img[..., -1]>0) # (h, w)
-            if self.config.white_bkgd:
-                img = img[...,:3] * img[...,-1:] + (1 - img[...,-1:]) # blend A to RGB
-            else:
-                img = img[...,:3] * img[...,-1:]
+            img = img[...,:3] * img[...,-1:] + (1 - img[...,-1:]) # white background
             self.all_images.append(img)
 
         self.all_c2w, self.all_images, self.all_fg_masks = \

@@ -7,11 +7,10 @@ dataset:
   scene: ???
   root_dir: ./load/nerf_synthetic/${dataset.scene}
   img_wh:
-    - ${system.resolution}
-    - ${system.resolution}
+    - 800
+    - 800
   near_plane: 2.0
   far_plane: 6.0
-  white_bkgd: true
   spheric_poses: false
   use_pixel_centers: true
   train_split: 'train'
@@ -75,7 +74,6 @@ model:
   
 system:
   name: neus-system
-  resolution: 800
   loss:
     lambda_rgb: 1.
     lambda_mask: 0.1
@@ -109,6 +107,6 @@ trainer:
   num_sanity_val_steps: 0
   val_check_interval: 10000
   limit_train_batches: 1.0
-  limit_val_batches: 0.02
+  limit_val_batches: 2
   enable_progress_bar: true 
   precision: 16

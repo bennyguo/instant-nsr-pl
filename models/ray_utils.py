@@ -23,25 +23,21 @@ def get_ray_directions(W, H, fx, fy, cx, cy, use_pixel_centers=True):
 def get_rays(directions, c2w, keepdim=False):
     # Rotate ray directions from camera coordinate to the world coordinate
     # rays_d = directions @ c2w[:, :3].T # (H, W, 3) # slow?
-    if directions.ndim == 3:
-        assert c2w.ndim == 2
-        rays_d = (directions[:,:,None,:] * c2w[None,None,:3,:3]).sum(-1) # (H, W, 3)
-    elif directions.ndim == 2:
-        if c2w.ndim == 3:
-            assert c2w.shape[0] == directions.shape[0]
-            rays_d = (directions[:,None,:] * c2w[:,:3,:3]).sum(-1) # (N_rays, 3)
-        elif c2w.ndim == 2:
-            rays_d = (directions[:,None,:] * c2w[None,:3,:3]).sum(-1) # (N_rays, 3)
-    rays_d = rays_d / torch.linalg.norm(rays_d, dim=-1, keepdim=True)
-    
-    # The origin of all rays is the camera origin in world coordinate
-    if c2w.ndim == 2:
-        rays_o = c2w[:,3].expand(rays_d.shape) # (H, W, 3)
-    elif c2w.ndim == 3:
+    assert directions.shape[-1] == 3
+
+    if directions.ndim == 2: # (N_rays, 3)
+        assert c2w.ndim == 3 # (N_rays, 4, 4)
+        rays_d = (directions[:,None,:] * c2w[:,:3,:3]).sum(-1) # (N_rays, 3)
         rays_o = c2w[:,:,3]
+    elif directions.ndim == 3: # (H, W, 3)
+        if c2w.ndim == 2: # (4, 4)
+            rays_d = (directions[:,:,None,:] * c2w[None,None,:3,:3]).sum(-1) # (H, W, 3)
+            rays_o = c2w[None,None,:,3].expand(rays_d.shape)
+        elif c2w.ndim == 3: # (B, 4, 4)
+            rays_d = (directions[None,:,:,None,:] * c2w[:,None,None,:3,:3]).sum(-1) # (B, H, W, 3)
+            rays_o = c2w[:,None,None,:,3].expand(rays_d.shape)
 
     if not keepdim:
-        rays_d = rays_d.view(-1, 3)
-        rays_o = rays_o.view(-1, 3)
+        rays_o, rays_d = rays_o.reshape(-1, 3), rays_d.reshape(-1, 3)
 
     return rays_o, rays_d

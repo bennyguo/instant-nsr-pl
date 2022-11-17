@@ -1,25 +1,19 @@
-name: nerf-blender-${dataset.scene}
+name: nerf-colmap-${basename:${dataset.root_dir}}
 tag: ''
 seed: 42
 
 dataset:
-  name: blender
-  scene: ???
-  root_dir: ./load/nerf_synthetic/${dataset.scene}
+  name: colmap
+  root_dir: ./load/nerf_synthetic_colmap/lego
   img_wh:
     - 800
     - 800
-  near_plane: 2.0
-  far_plane: 6.0
-  spheric_poses: false
   use_pixel_centers: true
-  train_split: 'train'
-  val_split: 'val'
-  test_split: 'test'
+  n_test_traj_steps: 120
 
 model:
   name: nerf
-  radius: 1.5
+  radius: 0.5
   num_samples_per_ray: 1024
   train_num_rays: 256
   max_train_num_rays: 8192

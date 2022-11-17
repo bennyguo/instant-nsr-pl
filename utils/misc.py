@@ -1,9 +1,11 @@
+import os
 from omegaconf import OmegaConf
 
 
 # ============ Register OmegaConf Recolvers ============= #
 OmegaConf.register_new_resolver('calc_exp_lr_decay_rate', lambda factor, n: factor**(1./n))
 OmegaConf.register_new_resolver('add', lambda a, b: a + b)
+OmegaConf.register_new_resolver('basename', lambda p: os.path.basename(p))
 # ======================================================= #
 
 

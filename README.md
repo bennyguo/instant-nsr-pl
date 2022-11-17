@@ -44,6 +44,15 @@ The code snapshots, checkpoints and experiment outputs are saved to `exp/[name]/
 ```bash
 python launch.py --config configs/nerf-blender.yaml --gpu 0 --train dataset.scene=lego tag=iter50k seed=0 trainer.max_steps=50000
 ```
+### Training on Custom COLMAP Data
+To get COLMAP data from custom images, you should have COLMAP installed (see [here](https://colmap.github.io/install.html) for installation instructions). Then put your images in the `images/` folder, and run `scripts/imgs2poses.py` specifying the path containing the `images/` folder. For example:
+```bash
+python scripts/imgs2poses.py ./load/bmvs_dog # images are in ./load/bmvs_dog/images
+```
+Existing data following this file structure also works as long as images are store in `images/` and there is a `sparse/` folder for the COLMAP output. To train on COLMAP data, please refer to the example config files `config/*-colmap.yaml`. Some notes:
+- Adapt the `root_dir` and `img_wh` option in the config file to your data;
+- The scene is normalized so that cameras have an average distance `1.0` to the center of the scene, therefore `radius` is default to `0.5` in the config file. You should consider increase `radius` if the cameras are to close to the object.
+- Background model is not yet implemented, so it works best on 360 captures with white background.
 
 ### Testing
 The training precedure are by default followed by testing, which computes metrics on test data, generates animations and exports the geometry as triangular meshes. If you want to do testing alone, just resume the pretrained model and replace `--train` with `--test`, for example:

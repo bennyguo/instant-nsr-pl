@@ -1,24 +1,18 @@
-name: nerf-blender-${dataset.scene}
+name: neus-colmap-${basename:${dataset.root_dir}}
 tag: ''
 seed: 42
 
 dataset:
-  name: blender
-  scene: ???
-  root_dir: ./load/nerf_synthetic/${dataset.scene}
+  name: colmap
+  root_dir: ./load/nerf_synthetic_colmap/lego
   img_wh:
     - 800
     - 800
-  near_plane: 2.0
-  far_plane: 6.0
-  spheric_poses: false
   use_pixel_centers: true
-  train_split: 'train'
-  val_split: 'val'
-  test_split: 'test'
+  n_test_traj_steps: 120
 
 model:
-  name: nerf
+  name: neus
   radius: 1.5
   num_samples_per_ray: 1024
   train_num_rays: 256
@@ -27,61 +21,75 @@ model:
   dynamic_ray_sampling: true
   batch_image_sampling: true
   randomized: true
-  ray_chunk: 32768
+  ray_chunk: 4096
+  init_variance: 0.3
+  cos_anneal_end: 5000
   geometry:
-    name: volume-density
+    name: volume-sdf
     radius: ${model.radius}
-    feature_dim: 16
-    density_activation: trunc_exp
-    density_bias: -1
+    feature_dim: 13
+    sdf_activation: none
+    sdf_bias: 0.
+    grad_type: analytic
     isosurface:
       method: mc
       resolution: 512
       chunk: 2097152
-      threshold: 5.0
+      threshold: 0.
     xyz_encoding_config:
       otype: HashGrid
       n_levels: 16
       n_features_per_level: 2
       log2_hashmap_size: 19
       base_resolution: 16
-      per_level_scale: 1.447269237440378  
+      per_level_scale: 1.447269237440378
+      include_xyz: true
     mlp_network_config:
-      otype: FullyFusedMLP
+      otype: VanillaMLP
       activation: ReLU
       output_activation: none
       n_neurons: 64
       n_hidden_layers: 1
+      sphere_init: true
+      weight_norm: true
   texture:
     name: volume-radiance
-    input_feature_dim: ${model.geometry.feature_dim}
+    input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
     dir_encoding_config:
       otype: SphericalHarmonics
       degree: 4    
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
-      output_activation: Sigmoid
+      output_activation: none
       n_neurons: 64
       n_hidden_layers: 2
+    color_activation: sigmoid
   
 system:
-  name: nerf-system
+  name: neus-system
   loss:
     lambda_rgb: 1.
-    lambda_opaque: 0.
+    lambda_mask: 0.
+    lambda_eikonal: 0.1
   optimizer:
     name: Adam
     args:
       lr: 0.01
       betas: [0.9, 0.99]
       eps: 1.e-15
+    params:
+      geometry:
+          lr: 0.01
+      texture:
+          lr: 0.01
+      variance:
+          lr: 0.001
   scheduler:
-    name: MultiStepLR
+    name: ExponentialLR
     interval: step
     args:
-      milestones: [10000, 15000, 18000]
-      gamma: 0.33
+      gamma: ${calc_exp_lr_decay_rate:0.1,${trainer.max_steps}}    
 
 checkpoint:
   save_top_k: -1
@@ -89,7 +97,7 @@ checkpoint:
 
 trainer:
   max_steps: 20000
-  log_every_n_steps: 200
+  log_every_n_steps: 100
   num_sanity_val_steps: 0
   val_check_interval: 10000
   limit_train_batches: 1.0
