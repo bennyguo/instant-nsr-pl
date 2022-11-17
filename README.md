@@ -77,7 +77,7 @@ All experiments are conducted on a single NVIDIA RTX3090.
 
 
 ## TODO
-- [ ] Support more dataset formats, like COLMAP outputs and DTU
+- [ ] Support more dataset formats, like ~COLMAP outputs~ and DTU
 - [ ] Support background model based on NeRF++ or Mip-NeRF360
 - [ ] Support GUI training and interaction
 - [ ] More illustrations about the framework
