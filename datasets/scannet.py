@@ -45,14 +45,15 @@ class ScannetDatasetBase():
         self.intrinsics_all = []
         self.pose_all = []
 
-        self.focal = None
+        self.fx, self.fy, self.cx, self.cy = None, None, None, None
         for scale_mat, world_mat in zip(scale_mats, world_mats):
             P = world_mat @ scale_mat
             P = P[:3, :4]
             intrinsics, pose = self.load_K_Rt_from_P(None, P)
             fx, fy = intrinsics[0, 0], intrinsics[1, 1]
-            # fx/fy should be the same
-            if self.focal is None: self.focal = int(fx)
+            cx, cy = intrinsics[0, 2], intrinsics[1, 2]
+            if self.fx is None:
+                self.fx, self.fy, self.cx, self.cy = fx, fy, cx, cy
             
             self.intrinsics_all.append(torch.from_numpy(intrinsics).float())
             self.pose_all.append(torch.from_numpy(pose).float())
@@ -61,32 +62,28 @@ class ScannetDatasetBase():
         
         self.w, self.h = w, h
 
-        self.near, self.far = self.config.near_plane, self.config.far_plane
-
         self.rank = _get_rank()
         # ray directions for all pixels, same for all images (same H, W, focal)
         self.directions = \
-            get_ray_directions(self.h, self.w, self.focal, self.config.use_pixel_centers).to(self.rank) # (h, w, 3)           
+            get_ray_directions(self.h, self.w, self.fx, self.fy, self.cx, self.cy, self.config.use_pixel_centers).to(self.rank) # (h, w, 3)           
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 
         for i, img_path in enumerate(image_paths):
-            self.all_c2w.append(self.pose_all[i])
+            self.all_c2w.append(self.pose_all[i][:3,:4])
 
-            img = Image.open(img_path)
+            img = Image.open(img_path).convert('RGB')
             img = img.resize(self.config.img_wh, Image.BICUBIC)
-            img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
-
-            self.all_fg_masks.append(img[..., -1]>0) # (h, w)
-            if self.config.white_bkgd:
-                img = img[...,:3] * img[...,-1:] + (1 - img[...,-1:]) # blend A to RGB
-            else:
-                img = img[...,:3] * img[...,-1:]
+            img = TF.to_tensor(img).permute(1, 2, 0) # (3, h, w) => (h, w, 3)
+            self.all_fg_masks.append(torch.ones_like(img[...,0])) # (h, w)
             self.all_images.append(img)
 
-        self.all_c2w, self.all_images = \
+        self.all_c2w, self.all_images, self.all_fg_masks = \
             torch.stack(self.all_c2w, dim=0).float().to(self.rank), \
-            torch.stack(self.all_images, dim=0).float().to(self.rank)
+            torch.stack(self.all_images, dim=0).float().to(self.rank), \
+            torch.stack(self.all_fg_masks, dim=0).float().to(self.rank)
+
+
     def load_K_Rt_from_P(self, filename, P=None):
         if P is None:
             lines = open(filename).read().splitlines()
@@ -140,14 +137,15 @@ class ScannetDataModule(pl.LightningDataModule):
         self.config = config
     
     def setup(self, stage=None):
+        # FIXME: the split is unused
         if stage in [None, 'fit']:
-            self.train_dataset = ScannetIterableDataset(self.config, self.config.train_split)
+            self.train_dataset = ScannetIterableDataset(self.config, 'train')
         if stage in [None, 'fit', 'validate']:
-            self.val_dataset = ScannetDataset(self.config, self.config.val_split)
+            self.val_dataset = ScannetDataset(self.config, 'val')
         if stage in [None, 'test']:
-            self.test_dataset = ScannetDataset(self.config, self.config.test_split)
+            self.test_dataset = ScannetDataset(self.config, 'test')
         if stage in [None, 'predict']:
-            self.predict_dataset = ScannetDataset(self.config, self.config.train_split)
+            self.predict_dataset = ScannetDataset(self.config, 'train')
 
     def prepare_data(self):
         pass
