@@ -26,9 +26,9 @@ def get_rays(directions, c2w, keepdim=False):
     assert directions.shape[-1] == 3
 
     if directions.ndim == 2: # (N_rays, 3)
-        assert c2w.ndim == 3 # (N_rays, 4, 4)
+        assert c2w.ndim == 3 # (N_rays, 4, 4) / (1, 4, 4)
         rays_d = (directions[:,None,:] * c2w[:,:3,:3]).sum(-1) # (N_rays, 3)
-        rays_o = c2w[:,:,3]
+        rays_o = c2w[:,:,3].expand(rays_d.shape)
     elif directions.ndim == 3: # (H, W, 3)
         if c2w.ndim == 2: # (4, 4)
             rays_d = (directions[:,:,None,:] * c2w[None,None,:3,:3]).sum(-1) # (H, W, 3)
