@@ -67,7 +67,7 @@ class ScannetDatasetBase():
         self.directions = \
             get_ray_directions(self.h, self.w, self.fx, self.fy, self.cx, self.cy, self.config.use_pixel_centers).to(self.rank) # (h, w, 3)           
 
-        self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
+        self.all_c2w, self.all_images, self.all_fg_masks, self.all_depths, self.all_normals = [], [], [], [], []
 
         for i, img_path in enumerate(image_paths):
             self.all_c2w.append(self.pose_all[i][:3,:4])
@@ -78,10 +78,17 @@ class ScannetDatasetBase():
             self.all_fg_masks.append(torch.ones_like(img[...,0])) # (h, w)
             self.all_images.append(img)
 
-        self.all_c2w, self.all_images, self.all_fg_masks = \
+            #geometric priors
+            depth_path = depth_paths[i]
+            depth = np.load(depth_path)
+            depth = TF.to_tensor(depth).permute(1, 2, 0) # (1, h, w) => (h, w, 1)
+            self.all_depths.append(depth)
+
+        self.all_c2w, self.all_images, self.all_fg_masks, self.all_depths = \
             torch.stack(self.all_c2w, dim=0).float().to(self.rank), \
             torch.stack(self.all_images, dim=0).float().to(self.rank), \
-            torch.stack(self.all_fg_masks, dim=0).float().to(self.rank)
+            torch.stack(self.all_fg_masks, dim=0).float().to(self.rank), \
+            torch.stack(self.all_depths, dim=0).float().to(self.rank)
 
 
     def load_K_Rt_from_P(self, filename, P=None):

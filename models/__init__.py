@@ -13,4 +13,4 @@ def make(name, config):
     return model
 
 
-from . import nerf, neus, geometry, texture
+from . import nerf, neus, monosdf, geometry, texture
