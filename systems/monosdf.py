@@ -65,6 +65,7 @@ class MonoSDFSystem(BaseSystem):
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1])
             depth = self.dataset.all_depths[index, y, x].view(-1, self.dataset.all_depths.shape[-1])
+            normal = self.dataset.all_depths[index, y, x].view(-1, self.dataset.all_depths.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1)
         else:
             c2w = self.dataset.all_c2w[index][0]
@@ -72,6 +73,7 @@ class MonoSDFSystem(BaseSystem):
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
             depth = self.dataset.all_depths[index].view(-1, self.dataset.all_depths.shape[-1])
+            normal = self.dataset.all_normals[index].view(-1, self.dataset.all_depths.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
         
         rays = torch.cat([rays_o, rays_d], dim=-1)
@@ -80,6 +82,7 @@ class MonoSDFSystem(BaseSystem):
             'rays': rays,
             'rgb': rgb,
             'depth': depth,
+            'normal': normal,
             'fg_mask': fg_mask
         })
     
@@ -142,6 +145,7 @@ class MonoSDFSystem(BaseSystem):
             {'type': 'rgb', 'img': img, 'kwargs': {'data_format': 'HWC'}},
             {'type': 'grayscale', 'img': batch['depth'].view(H, W), 'kwargs': {}},
             {'type': 'grayscale', 'img': depth, 'kwargs': {}},
+            {'type': 'rgb', 'img': batch['normal'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
             {'type': 'grayscale', 'img': opacity, 'kwargs': {'cmap': None, 'data_range': (0, 1)}}
         ])
         return {
