@@ -1,15 +1,21 @@
-name: monosdf-scannet-${dataset.scene}
+name: monosdf-blender-${dataset.scene}
 tag: ''
 seed: 42
 
 dataset:
-  name: scannet
+  name: blender
   scene: ???
-  root_dir: ./load/scannet/${dataset.scene}
+  root_dir: ./load/nerf_synthetic/${dataset.scene}
   img_wh:
-    - 384
-    - 384
+    - 800
+    - 800
+  near_plane: 2.0
+  far_plane: 6.0
+  spheric_poses: false
   use_pixel_centers: true
+  train_split: 'train'
+  val_split: 'val'
+  test_split: 'test'
 
 model:
   name: monosdf
@@ -96,7 +102,7 @@ checkpoint:
   every_n_train_steps: ${trainer.max_steps}
 
 trainer:
-  max_steps: 100000
+  max_steps: 20000
   log_every_n_steps: 100
   num_sanity_val_steps: 0
   val_check_interval: 10000

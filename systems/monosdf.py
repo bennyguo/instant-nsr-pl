@@ -9,7 +9,7 @@ import models
 from models.ray_utils import get_rays
 import systems
 from systems.base import BaseSystem
-from systems.criterions import PSNR
+from systems.criterions import PSNR, binary_cross_entropy
 
 
 @systems.register('monosdf-system')
@@ -25,7 +25,7 @@ class MonoSDFSystem(BaseSystem):
         }
         self.train_num_samples = self.config.model.train_num_rays * self.config.model.num_samples_per_ray
         self.train_num_rays = self.config.model.train_num_rays
-    
+
     def on_train_start(self) -> None:
         self.dataset = self.trainer.datamodule.train_dataloader().dataset
         return super().on_train_start()
@@ -64,16 +64,16 @@ class MonoSDFSystem(BaseSystem):
             directions = self.dataset.directions[y, x]
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1])
-            depth = self.dataset.all_depths[index, y, x].view(-1, self.dataset.all_depths.shape[-1])
-            normal = self.dataset.all_depths[index, y, x].view(-1, self.dataset.all_depths.shape[-1])
+            # depth = self.dataset.all_depths[index, y, x].view(-1, self.dataset.all_depths.shape[-1])
+            # normal = self.dataset.all_normals[index, y, x].view(-1, self.dataset.all_normals.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1)
         else:
             c2w = self.dataset.all_c2w[index][0]
             directions = self.dataset.directions
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
-            depth = self.dataset.all_depths[index].view(-1, self.dataset.all_depths.shape[-1])
-            normal = self.dataset.all_normals[index].view(-1, self.dataset.all_depths.shape[-1])
+            # depth = self.dataset.all_depths[index].view(-1, self.dataset.all_depths.shape[-1])
+            # normal = self.dataset.all_normals[index].view(-1, self.dataset.all_normals.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
         
         rays = torch.cat([rays_o, rays_d], dim=-1)
@@ -81,10 +81,10 @@ class MonoSDFSystem(BaseSystem):
         batch.update({
             'rays': rays,
             'rgb': rgb,
-            'depth': depth,
-            'normal': normal,
+            # 'depth': depth,
+            # 'normal': normal,
             'fg_mask': fg_mask
-        })
+        })      
     
     def training_step(self, batch, batch_idx):
         out = self(batch)
@@ -95,26 +95,36 @@ class MonoSDFSystem(BaseSystem):
         if self.config.model.dynamic_ray_sampling:
             train_num_rays = int(self.train_num_rays * (self.train_num_samples / out['num_samples'].sum().item()))        
             self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.max_train_num_rays)
-        
+
         loss_rgb = F.smooth_l1_loss(out['comp_rgb'][out['rays_valid']], batch['rgb'][out['rays_valid']])
         self.log('train/loss_rgb', loss_rgb)
-
-        loss_depth = F.smooth_l1_loss(out['depth'][out['rays_valid']], batch['depth'].squeeze()[out['rays_valid']])
-        self.log('train/loss_depth', loss_depth)
-
         loss += loss_rgb * self.C(self.config.system.loss.lambda_rgb)
-        loss += loss_depth * self.C(self.config.system.loss.lambda_depth)
+
+        loss_eikonal = ((torch.linalg.norm(out['sdf_grad_samples'], ord=2, dim=-1) - 1.)**2).mean()
+        self.log('train/loss_eikonal', loss_eikonal)
+        loss += loss_eikonal * self.C(self.config.system.loss.lambda_eikonal)
+        
+        opacity = torch.clamp(out['opacity'], 1.e-3, 1.-1.e-3)
+        loss_mask = binary_cross_entropy(opacity, batch['fg_mask'].float())
+        self.log('train/loss_mask', loss_mask)
+        loss += loss_mask * self.C(self.config.system.loss.lambda_mask)
+
+        # loss_normal = F.smooth_l1_loss(out['normal'][out['rays_valid']], batch['normal'][out['rays_valid']])
+        # self.log('train/loss_normal', loss_normal)
+        # loss += loss_normal * self.C(self.config.system.loss.lambda_rgb)
 
         losses_model_reg = self.model.regularizations(out)
         for name, value in losses_model_reg.items():
             self.log(f'train/loss_{name}', value)
             loss_ = value * self.C(self.config.system.loss[f"lambda_{name}"])
             loss += loss_
+        
+        self.log('train/inv_s', out['inv_s'], prog_bar=True)
 
         for name, value in self.config.system.loss.items():
             if name.startswith('lambda'):
                 self.log(f'train_params/{name}', self.C(value))
-        
+
         self.log('train/num_rays', float(self.train_num_rays), prog_bar=True)
 
         return {
@@ -139,13 +149,15 @@ class MonoSDFSystem(BaseSystem):
         W, H = self.config.dataset.img_wh
         img = out['comp_rgb'].view(H, W, 3)
         depth = out['depth'].view(H, W)
+        normal = out['normal'].view(H, W, 3)
         opacity = out['opacity'].view(H, W)
         self.save_image_grid(f"it{self.global_step}-{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
             {'type': 'rgb', 'img': img, 'kwargs': {'data_format': 'HWC'}},
-            {'type': 'grayscale', 'img': batch['depth'].view(H, W), 'kwargs': {}},
+            # {'type': 'grayscale', 'img': batch['depth'].view(H, W), 'kwargs': {}},
             {'type': 'grayscale', 'img': depth, 'kwargs': {}},
-            {'type': 'rgb', 'img': batch['normal'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
+            # {'type': 'rgb', 'img': batch['normal'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
+            {'type': 'rgb', 'img': normal, 'kwargs': {'data_format': 'HWC'}},
             {'type': 'grayscale', 'img': opacity, 'kwargs': {'cmap': None, 'data_range': (0, 1)}}
         ])
         return {
@@ -175,17 +187,21 @@ class MonoSDFSystem(BaseSystem):
             psnr = torch.mean(torch.stack([o['psnr'] for o in out_set.values()]))
             self.log('val/psnr', psnr, prog_bar=True, rank_zero_only=True)         
 
-    def test_step(self, batch, batch_idx):  
+    def test_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
         W, H = self.config.dataset.img_wh
         img = out['comp_rgb'].view(H, W, 3)
         depth = out['depth'].view(H, W)
+        normal = out['normal'].view(H, W, 3)
         opacity = out['opacity'].view(H, W)
         self.save_image_grid(f"it{self.global_step}-test/{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
             {'type': 'rgb', 'img': img, 'kwargs': {'data_format': 'HWC'}},
+            # {'type': 'grayscale', 'img': batch['depth'].view(H, W), 'kwargs': {}},
             {'type': 'grayscale', 'img': depth, 'kwargs': {}},
+            # {'type': 'rgb', 'img': batch['normal'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
+            {'type': 'rgb', 'img': normal, 'kwargs': {'data_format': 'HWC'}},
             {'type': 'grayscale', 'img': opacity, 'kwargs': {'cmap': None, 'data_range': (0, 1)}}
         ])
         return {
@@ -194,6 +210,10 @@ class MonoSDFSystem(BaseSystem):
         }      
     
     def test_epoch_end(self, out):
+        """
+        Synchronize devices.
+        Generate image sequence using test outputs.
+        """
         out = self.all_gather(out)
         if self.trainer.is_global_zero:
             out_set = {}
