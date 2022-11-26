@@ -16,4 +16,4 @@ def make(name, config, load_from_checkpoint=None):
     return system
 
 
-from . import nerf, neus
+from . import nerf, neus, monosdf
