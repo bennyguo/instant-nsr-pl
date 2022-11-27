@@ -13,7 +13,7 @@ dataset:
 
 model:
   name: neus
-  radius: 1.5
+  radius: 0.5
   num_samples_per_ray: 1024
   train_num_rays: 256
   max_train_num_rays: 8192
