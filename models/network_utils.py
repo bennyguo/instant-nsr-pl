@@ -65,6 +65,7 @@ class VanillaMLP(nn.Module):
         super().__init__()
         self.n_neurons, self.n_hidden_layers = config['n_neurons'], config['n_hidden_layers']
         self.sphere_init, self.weight_norm = config.get('sphere_init', False), config.get('weight_norm', False)
+        self.inside_out = config.get('inside_out', False)
         self.layers = [self.make_linear(dim_in, self.n_neurons, is_first=True, is_last=False), self.make_activation()]
         for i in range(self.n_hidden_layers - 1):
             self.layers += [self.make_linear(self.n_neurons, self.n_neurons, is_first=False, is_last=False), self.make_activation()]
@@ -81,7 +82,10 @@ class VanillaMLP(nn.Module):
         layer = nn.Linear(dim_in, dim_out, bias=False)
         if self.sphere_init:
             if is_last:
-                torch.nn.init.normal_(layer.weight, mean=math.sqrt(math.pi) / math.sqrt(dim_in), std=0.0001)
+                if self.inside_out:
+                    torch.nn.init.normal_(layer.weight, mean=-math.sqrt(math.pi) / math.sqrt(dim_in), std=0.0001)
+                else:
+                    torch.nn.init.normal_(layer.weight, mean=math.sqrt(math.pi) / math.sqrt(dim_in), std=0.0001)
             elif is_first:
                 torch.nn.init.constant_(layer.weight[:, 3:], 0.0)
                 torch.nn.init.normal_(layer.weight[:, :3], 0.0, math.sqrt(2) / math.sqrt(dim_out))
@@ -129,7 +133,10 @@ def sphere_init_tcnn_network(n_input_dims, n_output_dims, config, network):
         new_data.append(weight.flatten())
     # last layer
     weight = torch.zeros((n_output_dims, config.n_neurons)).to(data)
-    torch.nn.init.normal_(weight, mean=math.sqrt(math.pi) / math.sqrt(config.n_neurons), std=0.0001)
+    if config.get('inside_out', False):
+        torch.nn.init.normal_(weight, mean=-math.sqrt(math.pi) / math.sqrt(config.n_neurons), std=0.0001)
+    else:
+        torch.nn.init.normal_(weight, mean=math.sqrt(math.pi) / math.sqrt(config.n_neurons), std=0.0001)
     new_data.append(weight.flatten())
     new_data = torch.cat(new_data)
     data.copy_(new_data)
