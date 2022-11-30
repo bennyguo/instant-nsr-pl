@@ -35,7 +35,7 @@ model:
     radius: ${model.radius}
     feature_dim: 13
     sdf_activation: none
-    sdf_bias: 0.
+    sdf_bias: -0.5
     grad_type: analytic
     isosurface:
       method: mc
@@ -91,11 +91,21 @@ system:
           lr: 0.01
       variance:
           lr: 0.001
+  warmup_steps: 2000
   scheduler:
-    name: ExponentialLR
+    name: SequentialLR
     interval: step
-    args:
-      gamma: ${calc_exp_lr_decay_rate:0.1,${trainer.max_steps}}    
+    milestones:
+      - ${system.warmup_steps}
+    schedulers:
+      - name: LinearLR # linear warm-up in the first system.warmup_steps steps
+        args:
+          start_factor: 0.01
+          end_factor: 1.0
+          total_iters: ${system.warmup_steps}
+      - name: ExponentialLR
+        args:
+          gamma: ${calc_exp_lr_decay_rate:0.1,${sub:${trainer.max_steps},${system.warmup_steps}}}
 
 checkpoint:
   save_top_k: -1
