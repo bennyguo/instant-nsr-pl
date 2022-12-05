@@ -65,6 +65,7 @@ class VanillaMLP(nn.Module):
         super().__init__()
         self.n_neurons, self.n_hidden_layers = config['n_neurons'], config['n_hidden_layers']
         self.sphere_init, self.weight_norm = config.get('sphere_init', False), config.get('weight_norm', False)
+        self.sphere_init_radius = config.get('sphere_init_radius', 0.5)
         self.layers = [self.make_linear(dim_in, self.n_neurons, is_first=True, is_last=False), self.make_activation()]
         for i in range(self.n_hidden_layers - 1):
             self.layers += [self.make_linear(self.n_neurons, self.n_neurons, is_first=False, is_last=False), self.make_activation()]
@@ -81,7 +82,7 @@ class VanillaMLP(nn.Module):
         layer = nn.Linear(dim_in, dim_out, bias=True) # network without bias will degrade quality
         if self.sphere_init:
             if is_last:
-                torch.nn.init.constant_(layer.bias, 0.0) # this bias is implemented via sdf_bias
+                torch.nn.init.constant_(layer.bias, -self.sphere_init_radius)
                 torch.nn.init.normal_(layer.weight, mean=math.sqrt(math.pi) / math.sqrt(dim_in), std=0.0001)
             elif is_first:
                 torch.nn.init.constant_(layer.bias, 0.0)
