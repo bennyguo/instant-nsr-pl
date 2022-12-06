@@ -10,16 +10,34 @@ from nerfacc import ContractionType, OccupancyGrid, ray_marching, rendering
 
 
 class VarianceNetwork(nn.Module):
-    def __init__(self, init_val):
+    def __init__(self, config):
         super(VarianceNetwork, self).__init__()
-        self.register_parameter('variance', nn.Parameter(torch.tensor(init_val)))
+        self.config = config
+        self.init_val = self.config.init_val
+        self.register_parameter('variance', nn.Parameter(torch.tensor(self.config.init_val)))
+        self.modulate = self.config.get('modulate', False)
+        if self.modulate:
+            self.mod_start_steps = self.config.mod_start_steps
+            self.reach_max_steps = self.config.reach_max_steps
+            self.max_inv_s = self.config.max_inv_s
     
     @property
     def inv_s(self):
-        return torch.exp(self.variance * 10.0)
+        val = torch.exp(self.variance * 10.0)
+        if self.modulate and self.do_mod:
+            val = val.clamp_max(self.mod_val)
+        return val
 
     def forward(self, x):
         return torch.ones([len(x), 1], device=self.variance.device) * self.inv_s
+    
+    def update_step(self, epoch, global_step):
+        if self.modulate:
+            self.do_mod = global_step > self.mod_start_steps
+            if not self.do_mod:
+                self.prev_inv_s = self.inv_s.item()
+            else:
+                self.mod_val = min((global_step / self.reach_max_steps) * (self.max_inv_s - self.prev_inv_s) + self.prev_inv_s, self.max_inv_s)
 
 
 @models.register('neus')
@@ -27,7 +45,7 @@ class NeuSModel(BaseModel):
     def setup(self):
         self.geometry = models.make(self.config.geometry.name, self.config.geometry)
         self.texture = models.make(self.config.texture.name, self.config.texture)
-        self.variance = VarianceNetwork(self.config.init_variance)
+        self.variance = VarianceNetwork(self.config.variance)
         self.register_buffer('scene_aabb', torch.as_tensor([-self.config.radius, -self.config.radius, -self.config.radius, self.config.radius, self.config.radius, self.config.radius], dtype=torch.float32))
         if self.config.grid_prune:
             self.occupancy_grid = OccupancyGrid(
@@ -42,6 +60,7 @@ class NeuSModel(BaseModel):
     def update_step(self, epoch, global_step):
         # progressive viewdir PE frequencies
         update_module_step(self.texture, epoch, global_step)
+        update_module_step(self.variance, epoch, global_step)
 
         cos_anneal_end = self.config.get('cos_anneal_end', 0)
         self.cos_anneal_ratio = 1.0 if cos_anneal_end == 0 else min(1.0, global_step / cos_anneal_end)
@@ -60,7 +79,7 @@ class NeuSModel(BaseModel):
             return alpha
         
         if self.training and self.config.grid_prune:
-            self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn)
+            self.occupancy_grid.every_n_step(step=global_step, occ_eval_fn=occ_eval_fn, occ_thre=self.config.get('grid_prune_occ_thre', 0.01))
 
     def isosurface(self):
         mesh = self.geometry.isosurface()
