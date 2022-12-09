@@ -15,7 +15,7 @@ This repository contains a concise and extensible implementation of NeRF and Neu
 - out-of-the-box multi-GPU and mixed precision training by [PyTorch-Lightning](https://github.com/Lightning-AI/lightning)
 - hierarchical project layout that is designed to be easily customized and extended, flexible experiment configuration by [OmegaConf](https://github.com/omry/omegaconf)
 
-**Please subscribe to #26 for our latest findings on quality improvements!**
+**Please subscribe to [#26](https://github.com/bennyguo/instant-nsr-pl/issues/26) for our latest findings on quality improvements!**
 
 
 ## Requirements
