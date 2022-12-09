@@ -73,6 +73,18 @@ class NeRFSystem(BaseSystem):
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
         
         rays = torch.cat([rays_o, rays_d], dim=-1)
+
+        if stage in ['train']:
+            if self.config.model.background == 'white':
+                self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
+            elif self.config.model.background == 'random':
+                self.model.background_color = torch.rand((3,), dtype=torch.float32, device=self.rank)
+            else:
+                raise NotImplementedError
+        else:
+            self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
+        
+        rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])        
         
         batch.update({
             'rays': rays,

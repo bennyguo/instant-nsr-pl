@@ -21,7 +21,7 @@ class NeRFModel(BaseModel):
                 contraction_type=ContractionType.AABB
             )
         self.randomized = self.config.randomized
-        self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
+        self.background_color = None
         self.render_step_size = 1.732 * 2 * self.config.radius / self.config.num_samples_per_ray
     
     def update_step(self, epoch, global_step):

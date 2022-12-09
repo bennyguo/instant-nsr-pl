@@ -53,9 +53,8 @@ class BlenderDatasetBase():
             img = img.resize(self.config.img_wh, Image.BICUBIC)
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
 
-            self.all_fg_masks.append(img[..., -1]>0) # (h, w)
-            img = img[...,:3] * img[...,-1:] + (1 - img[...,-1:]) # white background
-            self.all_images.append(img)
+            self.all_fg_masks.append(img[..., -1]) # (h, w)
+            self.all_images.append(img[...,:3])
 
         self.all_c2w, self.all_images, self.all_fg_masks = \
             torch.stack(self.all_c2w, dim=0).float().to(self.rank), \

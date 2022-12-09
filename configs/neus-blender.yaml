@@ -24,12 +24,13 @@ model:
   train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true
-  grid_prune_occ_thre: 0.01
+  grid_prune_occ_thre: 0.001
   dynamic_ray_sampling: true
   batch_image_sampling: true
   randomized: true
   ray_chunk: 4096
-  cos_anneal_end: ${idiv:${trainer.max_steps},2}
+  cos_anneal_end: 5000
+  background: random
   variance:
     init_val: 0.3
     modulate: false
@@ -77,9 +78,12 @@ model:
 system:
   name: neus-system
   loss:
-    lambda_rgb: 1.
+    lambda_rgb_mse: 10.
+    lambda_rgb_l1: 1.
     lambda_mask: 0.1
     lambda_eikonal: 0.1
+    lambda_sparsity: 0.01
+    sparsity_scale: 1.
   optimizer:
     name: Adam
     args:
@@ -92,8 +96,8 @@ system:
       texture:
           lr: 0.01
       variance:
-          lr: 5.e-4
-  warmup_steps: 2000
+          lr: 0.001
+  warmup_steps: 500
   scheduler:
     name: SequentialLR
     interval: step

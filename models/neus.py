@@ -54,7 +54,7 @@ class NeuSModel(BaseModel):
                 contraction_type=ContractionType.AABB
             )
         self.randomized = self.config.randomized
-        self.register_buffer('background_color', torch.as_tensor([1.0, 1.0, 1.0], dtype=torch.float32), persistent=False)
+        self.background_color = None
         self.render_step_size = 1.732 * 2 * self.config.radius / self.config.num_samples_per_ray
     
     def update_step(self, epoch, global_step):
@@ -112,6 +112,7 @@ class NeuSModel(BaseModel):
     def forward_(self, rays):
         rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
 
+        sdf_samples = []
         sdf_grad_samples = []
 
         def alpha_fn(t_starts, t_ends, ray_indices):
@@ -133,6 +134,7 @@ class NeuSModel(BaseModel):
             midpoints = (t_starts + t_ends) / 2.
             positions = t_origins + t_dirs * midpoints
             sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True)
+            sdf_samples.append(sdf)
             sdf_grad_samples.append(sdf_grad)
             dists = t_ends - t_starts
             normal = F.normalize(sdf_grad, p=2, dim=-1)
@@ -161,6 +163,7 @@ class NeuSModel(BaseModel):
             render_bkgd=self.background_color,
         )
 
+        sdf_samples = torch.cat(sdf_samples, dim=0)
         sdf_grad_samples = torch.cat(sdf_grad_samples, dim=0)
         opacity, depth = opacity.squeeze(-1), depth.squeeze(-1)
 
@@ -174,6 +177,7 @@ class NeuSModel(BaseModel):
 
         if self.training:
             rv.update({
+                'sdf_samples': sdf_samples,
                 'sdf_grad_samples': sdf_grad_samples
             })
 

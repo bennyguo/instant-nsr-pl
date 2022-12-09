@@ -28,6 +28,7 @@ model:
   batch_image_sampling: true
   randomized: true
   ray_chunk: 32768
+  background: random
   geometry:
     name: volume-density
     radius: ${model.radius}

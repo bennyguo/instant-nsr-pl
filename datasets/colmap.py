@@ -126,6 +126,9 @@ class ColmapDatasetBase():
         self.directions = get_ray_directions(w, h, fx, fy, cx, cy).to(self.rank)
 
         imdata = read_images_binary(os.path.join(self.config.root_dir, 'sparse/0/images.bin'))
+
+        mask_dir = os.path.join(self.config.root_dir, 'masks')
+        self.use_mask = os.path.exists(mask_dir) and self.config.use_mask
         
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 
@@ -140,8 +143,17 @@ class ColmapDatasetBase():
                 img = Image.open(img_path)
                 img = img.resize(self.config.img_wh, Image.BICUBIC)
                 img = TF.to_tensor(img).permute(1, 2, 0)[...,:3]
+                if self.use_mask:
+                    mask_paths = [os.path.join(mask_dir, d.name), os.path.join(mask_dir, d.name[3:])]
+                    mask_paths = list(filter(os.path.exists, mask_paths))
+                    assert len(mask_paths) == 1
+                    mask = Image.open(mask_paths[0]).convert('L') # (H, W, 1)
+                    mask = mask.resize(self.config.img_wh, Image.BICUBIC)
+                    mask = TF.to_tensor(mask)[0]
+                else:
+                    mask = torch.ones_like(img[...,0])
+                self.all_fg_masks.append(mask) # (h, w)
                 self.all_images.append(img)
-                self.all_fg_masks.append(torch.ones_like(img[...,0])) # (h, w)
         
         self.all_c2w = torch.stack(self.all_c2w, dim=0)   
 

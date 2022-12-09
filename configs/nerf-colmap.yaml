@@ -4,10 +4,11 @@ seed: 42
 
 dataset:
   name: colmap
-  root_dir: ./load/nerf_synthetic_colmap/lego
+  root_dir: ./load/DTU/scan65
   img_wh:
     - 800
-    - 800
+    - 600
+  use_mask: true # if true, crop out the foreground region; only effective when root_dir/masks folder exists    
   use_pixel_centers: true
   n_test_traj_steps: 120
 
@@ -22,6 +23,7 @@ model:
   batch_image_sampling: true
   randomized: true
   ray_chunk: 32768
+  background: random
   geometry:
     name: volume-density
     radius: ${model.radius}

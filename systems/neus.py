@@ -71,8 +71,20 @@ class NeuSSystem(BaseSystem):
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
-        
+
         rays = torch.cat([rays_o, rays_d], dim=-1)
+
+        if stage in ['train']:
+            if self.config.model.background == 'white':
+                self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
+            elif self.config.model.background == 'random':
+                self.model.background_color = torch.rand((3,), dtype=torch.float32, device=self.rank)
+            else:
+                raise NotImplementedError
+        else:
+            self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
+        
+        rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])
         
         batch.update({
             'rays': rays,
@@ -90,9 +102,13 @@ class NeuSSystem(BaseSystem):
             train_num_rays = int(self.train_num_rays * (self.train_num_samples / out['num_samples'].sum().item()))        
             self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.max_train_num_rays)
 
-        loss_rgb = F.l1_loss(out['comp_rgb'], batch['rgb'])
-        self.log('train/loss_rgb', loss_rgb)
-        loss += loss_rgb * self.C(self.config.system.loss.lambda_rgb)
+        loss_rgb_mse = F.mse_loss(out['comp_rgb'], batch['rgb'])
+        self.log('train/loss_rgb', loss_rgb_mse)
+        loss += loss_rgb_mse * self.C(self.config.system.loss.lambda_rgb_mse)
+
+        loss_rgb_l1 = F.l1_loss(out['comp_rgb'], batch['rgb'])
+        self.log('train/loss_rgb', loss_rgb_l1)
+        loss += loss_rgb_l1 * self.C(self.config.system.loss.lambda_rgb_l1)        
 
         loss_eikonal = ((torch.linalg.norm(out['sdf_grad_samples'], ord=2, dim=-1) - 1.)**2).mean()
         self.log('train/loss_eikonal', loss_eikonal)
@@ -101,7 +117,11 @@ class NeuSSystem(BaseSystem):
         opacity = torch.clamp(out['opacity'], 1.e-3, 1.-1.e-3)
         loss_mask = binary_cross_entropy(opacity, batch['fg_mask'].float())
         self.log('train/loss_mask', loss_mask)
-        loss += loss_mask * self.C(self.config.system.loss.lambda_mask)
+        loss += loss_mask * (self.C(self.config.system.loss.lambda_mask) if self.dataset.use_mask else 0.0)
+
+        loss_sparsity = torch.exp(-self.config.system.loss.sparsity_scale * out['sdf_samples'].abs()).mean()
+        self.log('train/loss_sparsity', loss_sparsity)
+        loss += loss_sparsity * self.C(self.config.system.loss.lambda_sparsity)
 
         losses_model_reg = self.model.regularizations(out)
         for name, value in losses_model_reg.items():
