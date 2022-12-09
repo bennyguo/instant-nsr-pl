@@ -11,9 +11,11 @@ This repository contains a concise and extensible implementation of NeRF and Neu
 ## Features
 **This repository aims to provide a highly efficient while customizable boilerplate for research projects based on NeRF or NeuS.**
 
-- Acceleration techniques from [Instant-NGP](https://github.com/NVlabs/instant-ngp): multiresolution hash encoding and fully fused networks by [tiny-cuda-nn](https://github.com/NVlabs/tiny-cuda-nn), occupancy grid pruning and rendering by [nerfacc](https://github.com/KAIR-BAIR/nerfacc)
+- acceleration techniques from [Instant-NGP](https://github.com/NVlabs/instant-ngp): multiresolution hash encoding and fully fused networks by [tiny-cuda-nn](https://github.com/NVlabs/tiny-cuda-nn), occupancy grid pruning and rendering by [nerfacc](https://github.com/KAIR-BAIR/nerfacc)
 - out-of-the-box multi-GPU and mixed precision training by [PyTorch-Lightning](https://github.com/Lightning-AI/lightning)
 - hierarchical project layout that is designed to be easily customized and extended, flexible experiment configuration by [OmegaConf](https://github.com/omry/omegaconf)
+
+**Please subscribe to #26 for our latest findings on quality improvements!**
 
 
 ## Requirements
@@ -49,10 +51,10 @@ To get COLMAP data from custom images, you should have COLMAP installed (see [he
 ```bash
 python scripts/imgs2poses.py ./load/bmvs_dog # images are in ./load/bmvs_dog/images
 ```
-Existing data following this file structure also works as long as images are store in `images/` and there is a `sparse/` folder for the COLMAP output. To train on COLMAP data, please refer to the example config files `config/*-colmap.yaml`. Some notes:
+Existing data following this file structure also works as long as images are store in `images/` and there is a `sparse/` folder for the COLMAP output. An optional `masks/` folder could be provided for mask supervision. To train on COLMAP data, please refer to the example config files `config/*-colmap.yaml`. Some notes:
 - Adapt the `root_dir` and `img_wh` option in the config file to your data;
 - The scene is normalized so that cameras have an average distance `1.0` to the center of the scene, therefore `radius` is default to `0.5` in the config file. You should consider increase `radius` if the cameras are to close to the object.
-- Background model is not yet implemented, so it works best on 360 captures with white background.
+- Background model is not yet implemented, so it works best on 360 captures with known foreground masks.
 
 ### Testing
 The training precedure are by default followed by testing, which computes metrics on test data, generates animations and exports the geometry as triangular meshes. If you want to do testing alone, just resume the pretrained model and replace `--train` with `--test`, for example:
