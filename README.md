@@ -53,7 +53,7 @@ python scripts/imgs2poses.py ./load/bmvs_dog # images are in ./load/bmvs_dog/ima
 ```
 Existing data following this file structure also works as long as images are store in `images/` and there is a `sparse/` folder for the COLMAP output. An optional `masks/` folder could be provided for mask supervision. To train on COLMAP data, please refer to the example config files `config/*-colmap.yaml`. Some notes:
 - Adapt the `root_dir` and `img_wh` option in the config file to your data;
-- The scene is normalized so that cameras have an average distance `1.0` to the center of the scene, therefore `radius` is default to `0.5` in the config file. You should consider increase `radius` if the cameras are to close to the object.
+- The scene is normalized so that cameras have an minimum distance `1.0` to the center of the scene, therefore `radius` is default to `0.5` in the config file. You should consider increase `radius` if the cameras are to close to the object.
 - Background model is not yet implemented, so it works best on 360 captures with known foreground masks.
 
 ### Testing
