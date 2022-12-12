@@ -53,18 +53,22 @@ class BaseSystem(pl.LightningModule, SaverMixin):
     But on_after_batch_transfer does not support DP.
     """
     def on_train_batch_start(self, batch, batch_idx, unused=0):
+        self.dataset = self.trainer.datamodule.train_dataloader().dataset
         self.preprocess_data(batch, 'train')
         update_module_step(self.model, self.current_epoch, self.global_step)
     
     def on_validation_batch_start(self, batch, batch_idx, dataloader_idx):
+        self.dataset = self.trainer.datamodule.val_dataloader().dataset
         self.preprocess_data(batch, 'validation')
         update_module_step(self.model, self.current_epoch, self.global_step)
     
     def on_test_batch_start(self, batch, batch_idx, dataloader_idx):
+        self.dataset = self.trainer.datamodule.test_dataloader().dataset
         self.preprocess_data(batch, 'test')
         update_module_step(self.model, self.current_epoch, self.global_step)
 
     def on_predict_batch_start(self, batch, batch_idx, dataloader_idx):
+        self.dataset = self.trainer.datamodule.predict_dataloader().dataset
         self.preprocess_data(batch, 'predict')
         update_module_step(self.model, self.current_epoch, self.global_step)
     

@@ -21,6 +21,8 @@ class BlenderDatasetBase():
         self.split = split
         self.rank = _get_rank()
 
+        self.use_mask = True
+
         with open(os.path.join(self.config.root_dir, f"transforms_{self.split}.json"), 'r') as f:
             meta = json.load(f)
 

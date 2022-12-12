@@ -25,22 +25,6 @@ class NeRFSystem(BaseSystem):
         }
         self.train_num_samples = self.config.model.train_num_rays * self.config.model.num_samples_per_ray
         self.train_num_rays = self.config.model.train_num_rays
-    
-    def on_train_start(self) -> None:
-        self.dataset = self.trainer.datamodule.train_dataloader().dataset
-        return super().on_train_start()
-    
-    def on_validation_start(self) -> None:
-        self.dataset = self.trainer.datamodule.val_dataloader().dataset
-        return super().on_validation_start()
-    
-    def on_test_start(self) -> None:
-        self.dataset = self.trainer.datamodule.test_dataloader().dataset
-        return super().on_test_start()
-    
-    def on_predict_start(self) -> None:
-        self.dataset = self.trainer.datamodule.predict_dataloader().dataset
-        return super().on_predict_start()
 
     def forward(self, batch):
         return self.model(batch['rays'])
