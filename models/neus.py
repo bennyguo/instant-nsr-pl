@@ -1,3 +1,4 @@
+from typing import Optional, Callable, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,7 +7,8 @@ import models
 from models.base import BaseModel
 from models.utils import chunk_batch
 from systems.utils import update_module_step
-from nerfacc import ContractionType, OccupancyGrid, ray_marching, rendering
+from nerfacc import ContractionType, OccupancyGrid, ray_marching
+from nerfacc import unpack_info, render_weight_from_alpha, accumulate_along_rays
 
 
 class VarianceNetwork(nn.Module):
@@ -140,7 +142,7 @@ class NeuSModel(BaseModel):
             normal = F.normalize(sdf_grad, p=2, dim=-1)
             alpha = self.get_alpha(sdf, normal, t_dirs, dists)
             rgb = self.texture(feature, t_dirs, normal)
-            return rgb, alpha[...,None]
+            return rgb, alpha[...,None], sdf_grad
 
         with torch.no_grad():
             packed_info, t_starts, t_ends = ray_marching(
@@ -155,7 +157,7 @@ class NeuSModel(BaseModel):
                 alpha_thre=0.0
             )
 
-        rgb, opacity, depth = rendering(
+        rgb, opacity, depth, normal_maps = custom_rendering(
             packed_info,
             t_starts,
             t_ends,
@@ -165,12 +167,13 @@ class NeuSModel(BaseModel):
 
         sdf_samples = torch.cat(sdf_samples, dim=0)
         sdf_grad_samples = torch.cat(sdf_grad_samples, dim=0)
-        opacity, depth = opacity.squeeze(-1), depth.squeeze(-1)
+        opacity, depth, normal_maps = opacity.squeeze(-1), depth.squeeze(-1), normal_maps.squeeze(-1)
 
         rv = {
             'comp_rgb': rgb,
             'opacity': opacity,
             'depth': depth,
+            'normal':normal_maps,
             'rays_valid': opacity > 0,
             'num_samples': torch.as_tensor([len(t_starts)], dtype=torch.int32, device=rays.device)
         }
@@ -207,3 +210,118 @@ class NeuSModel(BaseModel):
         losses.update(self.texture.regularizations(out))
         return losses
 
+def custom_rendering(
+    # ray marching results
+    packed_info: torch.Tensor,
+    t_starts: torch.Tensor,
+    t_ends: torch.Tensor,
+    # radiance field
+    rgb_alpha_fn: Optional[Callable] = None,
+    # rendering options
+    early_stop_eps: float = 1e-4,
+    alpha_thre: float = 0.0,
+    render_bkgd: Optional[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Render the rays through the radience field defined by `rgb_sigma_fn`.
+
+    This function is differentiable to the outputs of `rgb_sigma_fn` so it can be used for
+    gradient-based optimization.
+
+    Warning:
+        This function is not differentiable to `t_starts`, `t_ends`.
+
+    Args:
+        packed_info: Packed ray marching info. See :func:`ray_marching` for details.
+        t_starts: Per-sample start distance. Tensor with shape (n_samples, 1).
+        t_ends: Per-sample end distance. Tensor with shape (n_samples, 1).
+        rgb_alpha_fn: A function that takes in samples {t_starts (N, 1), t_ends (N, 1), \
+            ray indices (N,)} and returns the post-activation rgb (N, 3) and opacity \
+            values (N, 1). At least one of `rgb_sigma_fn` and `rgb_alpha_fn` should be \
+            specified.
+        early_stop_eps: Early stop threshold during trasmittance accumulation. Default: 1e-4.
+        alpha_thre: Alpha threshold for skipping empty space. Default: 0.0.
+        render_bkgd: Optional. Background color. Tensor with shape (3,).
+
+    Returns:
+        Ray colors (n_rays, 3), opacities (n_rays, 1) and depths (n_rays, 1).
+
+    Examples:
+
+    .. code-block:: python
+
+        import torch
+        from nerfacc import OccupancyGrid, ray_marching, rendering
+
+        device = "cuda:0"
+        batch_size = 128
+        rays_o = torch.rand((batch_size, 3), device=device)
+        rays_d = torch.randn((batch_size, 3), device=device)
+        rays_d = rays_d / rays_d.norm(dim=-1, keepdim=True)
+
+        # Ray marching.
+        packed_info, t_starts, t_ends = ray_marching(
+            rays_o, rays_d, near_plane=0.1, far_plane=1.0, render_step_size=1e-3
+        )
+
+        # Rendering.
+        def rgb_sigma_fn(t_starts, t_ends, ray_indices):
+            # This is a dummy function that returns random values.
+            rgbs = torch.rand((t_starts.shape[0], 3), device=device)
+            sigmas = torch.rand((t_starts.shape[0], 1), device=device)
+            return rgbs, sigmas
+        colors, opacities, depths = rendering(rgb_sigma_fn, packed_info, t_starts, t_ends)
+
+        # torch.Size([128, 3]) torch.Size([128, 1]) torch.Size([128, 1])
+        print(colors.shape, opacities.shape, depths.shape)
+
+    """
+    if callable(packed_info):
+        raise RuntimeError(
+            "You maybe want to use the nerfacc<=0.2.1 version. For nerfacc>0.2.1, "
+            "The first argument of `rendering` should be the packed ray packed info. "
+            "See the latest documentation for details: "
+            "https://www.nerfacc.com/en/latest/apis/rendering.html#nerfacc.rendering"
+        )
+
+    n_rays = packed_info.shape[0]
+    ray_indices = unpack_info(packed_info)
+
+    # Query sigma/alpha and color with gradients
+
+    rgbs, alphas, sdf_grad = rgb_alpha_fn(t_starts, t_ends, ray_indices.long())
+    assert rgbs.shape[-1] == 3, "rgbs must have 3 channels, got {}".format(
+        rgbs.shape
+    )
+    assert (
+        alphas.shape == t_starts.shape
+    ), "alphas must have shape of (N, 1)! Got {}".format(alphas.shape)
+    # Rendering: compute weights and ray indices.
+    weights = render_weight_from_alpha(
+        packed_info, alphas, early_stop_eps, alpha_thre
+    )
+
+    # Rendering: accumulate rgbs, opacities, and depths along the rays.
+    colors = accumulate_along_rays(
+        weights, ray_indices, values=rgbs, n_rays=n_rays
+    )
+    opacities = accumulate_along_rays(
+        weights, ray_indices, values=None, n_rays=n_rays
+    )
+    depths = accumulate_along_rays(
+        weights,
+        ray_indices,
+        values=(t_starts + t_ends) / 2.0,
+        n_rays=n_rays,
+    )
+    normals = accumulate_along_rays(
+        weights,
+        ray_indices,
+        values=sdf_grad,
+        n_rays=n_rays,
+    )
+
+    # Background composition.
+    if render_bkgd is not None:
+        colors = colors + render_bkgd * (1.0 - opacities)
+
+    return colors, opacities, depths, normals
