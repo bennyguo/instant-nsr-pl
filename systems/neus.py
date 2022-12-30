@@ -56,7 +56,7 @@ class NeuSSystem(BaseSystem):
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
 
-        rays = torch.cat([rays_o, rays_d], dim=-1)
+        rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
         if stage in ['train']:
             if self.config.model.background == 'white':
