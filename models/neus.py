@@ -143,7 +143,7 @@ class NeuSModel(BaseModel):
             return rgb, alpha[...,None]
 
         with torch.no_grad():
-            packed_info, t_starts, t_ends = ray_marching(
+            ray_indices, t_starts, t_ends = ray_marching(
                 rays_o, rays_d,
                 scene_aabb=self.scene_aabb,
                 grid=self.occupancy_grid if self.config.grid_prune else None,
@@ -156,11 +156,13 @@ class NeuSModel(BaseModel):
             )
 
         rgb, opacity, depth = rendering(
-            packed_info,
             t_starts,
             t_ends,
+            ray_indices,
+            n_rays=rays.shape[0],
             rgb_alpha_fn=rgb_alpha_fn,
             render_bkgd=self.background_color,
+
         )
 
         sdf_samples = torch.cat(sdf_samples, dim=0)
