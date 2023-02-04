@@ -45,13 +45,13 @@ class NeuSSystem(BaseSystem):
             y = torch.randint(
                 0, self.dataset.h, size=(self.train_num_rays,), device=self.dataset.all_images.device
             )
-            directions = self.dataset.directions[y, x]
+            directions = self.dataset.directions[y, x] if self.dataset.directions.ndim == 3 else self.dataset.directions[index, y, x]
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1)
         else:
             c2w = self.dataset.all_c2w[index][0]
-            directions = self.dataset.directions
+            directions = self.dataset.directions if self.dataset.directions.ndim == 3 else self.dataset.directions[index][0]
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
@@ -140,7 +140,7 @@ class NeuSSystem(BaseSystem):
     def validation_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
-        W, H = self.config.dataset.img_wh
+        W, H = self.dataset.w, self.dataset.h
         img = out['comp_rgb'].view(H, W, 3)
         depth = out['depth'].view(H, W)
         opacity = out['opacity'].view(H, W)
@@ -180,7 +180,7 @@ class NeuSSystem(BaseSystem):
     def test_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
-        W, H = self.config.dataset.img_wh
+        W, H = self.dataset.w, self.dataset.h
         img = out['comp_rgb'].view(H, W, 3)
         depth = out['depth'].view(H, W)
         opacity = out['opacity'].view(H, W)
