@@ -6,7 +6,7 @@ import models
 from models.base import BaseModel
 from models.utils import chunk_batch
 from systems.utils import update_module_step
-from nerfacc import ContractionType, OccupancyGrid, ray_marching, rendering
+from nerfacc import ContractionType, OccupancyGrid, ray_marching, render_weight_from_alpha, accumulate_along_rays
 
 
 class VarianceNetwork(nn.Module):
@@ -110,65 +110,47 @@ class NeuSModel(BaseModel):
         return alpha
 
     def forward_(self, rays):
+        n_rays = rays.shape[0]
         rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
 
-        sdf_samples = []
-        sdf_grad_samples = []
-
-        def alpha_fn(t_starts, t_ends, ray_indices):
-            ray_indices = ray_indices.long()
-            t_origins = rays_o[ray_indices]
-            t_dirs = rays_d[ray_indices]
-            midpoints = (t_starts + t_ends) / 2.
-            positions = t_origins + t_dirs * midpoints
-            sdf, sdf_grad = self.geometry(positions, with_grad=True, with_feature=False)
-            dists = t_ends - t_starts
-            normal = F.normalize(sdf_grad, p=2, dim=-1)
-            alpha = self.get_alpha(sdf, normal, t_dirs, dists)
-            return alpha[...,None]
-        
-        def rgb_alpha_fn(t_starts, t_ends, ray_indices):
-            ray_indices = ray_indices.long()
-            t_origins = rays_o[ray_indices]
-            t_dirs = rays_d[ray_indices]
-            midpoints = (t_starts + t_ends) / 2.
-            positions = t_origins + t_dirs * midpoints
-            sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True)
-            sdf_samples.append(sdf)
-            sdf_grad_samples.append(sdf_grad)
-            dists = t_ends - t_starts
-            normal = F.normalize(sdf_grad, p=2, dim=-1)
-            alpha = self.get_alpha(sdf, normal, t_dirs, dists)
-            rgb = self.texture(feature, t_dirs, normal)
-            return rgb, alpha[...,None]
-
         with torch.no_grad():
-            packed_info, t_starts, t_ends = ray_marching(
+            ray_indices, t_starts, t_ends = ray_marching(
                 rays_o, rays_d,
                 scene_aabb=self.scene_aabb,
                 grid=self.occupancy_grid if self.config.grid_prune else None,
-                alpha_fn=alpha_fn,
+                alpha_fn=None,
                 near_plane=None, far_plane=None,
                 render_step_size=self.render_step_size,
                 stratified=self.randomized,
                 cone_angle=0.0,
                 alpha_thre=0.0
             )
+        
+        ray_indices = ray_indices.long()
+        t_origins = rays_o[ray_indices]
+        t_dirs = rays_d[ray_indices]
+        midpoints = (t_starts + t_ends) / 2.
+        positions = t_origins + t_dirs * midpoints
+        dists = t_ends - t_starts
 
-        rgb, opacity, depth = rendering(
-            packed_info,
-            t_starts,
-            t_ends,
-            rgb_alpha_fn=rgb_alpha_fn,
-            render_bkgd=self.background_color,
-        )
+        sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True)
+        normal = F.normalize(sdf_grad, p=2, dim=-1)
+        alpha = self.get_alpha(sdf, normal, t_dirs, dists)[...,None]
+        rgb = self.texture(feature, t_dirs, normal)
 
-        sdf_samples = torch.cat(sdf_samples, dim=0)
-        sdf_grad_samples = torch.cat(sdf_grad_samples, dim=0)
+        weights = render_weight_from_alpha(alpha, ray_indices=ray_indices, n_rays=n_rays)
+        opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
+        depth = accumulate_along_rays(weights, ray_indices, values=midpoints, n_rays=n_rays)
+        comp_rgb = accumulate_along_rays(weights, ray_indices, values=rgb, n_rays=n_rays)
+        comp_rgb = comp_rgb + self.background_color * (1.0 - opacity)
+        comp_normal = accumulate_along_rays(weights, ray_indices, values=normal, n_rays=n_rays)
+        comp_normal = F.normalize(comp_normal, p=2, dim=-1)
+
         opacity, depth = opacity.squeeze(-1), depth.squeeze(-1)
 
         rv = {
-            'comp_rgb': rgb,
+            'comp_rgb': comp_rgb,
+            'comp_normal': comp_normal,
             'opacity': opacity,
             'depth': depth,
             'rays_valid': opacity > 0,
@@ -177,8 +159,8 @@ class NeuSModel(BaseModel):
 
         if self.training:
             rv.update({
-                'sdf_samples': sdf_samples,
-                'sdf_grad_samples': sdf_grad_samples
+                'sdf_samples': sdf,
+                'sdf_grad_samples': sdf_grad
             })
 
         return rv
@@ -206,4 +188,3 @@ class NeuSModel(BaseModel):
         losses.update(self.geometry.regularizations(out))
         losses.update(self.texture.regularizations(out))
         return losses
-

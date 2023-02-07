@@ -41,6 +41,7 @@ class NeRFModel(BaseModel):
         return mesh
 
     def forward_(self, rays):
+        n_rays = rays.shape[0]
         rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
 
         def sigma_fn(t_starts, t_ends, ray_indices):
@@ -61,7 +62,7 @@ class NeRFModel(BaseModel):
             return rgb, density[...,None]
 
         with torch.no_grad():
-            packed_info, t_starts, t_ends = ray_marching(
+            ray_indices, t_starts, t_ends = ray_marching(
                 rays_o, rays_d,
                 scene_aabb=self.scene_aabb,
                 grid=self.occupancy_grid if self.config.grid_prune else None,
@@ -73,10 +74,11 @@ class NeRFModel(BaseModel):
                 alpha_thre=0.0
             )   
 
-        rgb, opacity, depth = rendering(
-            packed_info,
+        comp_rgb, opacity, depth = rendering(
             t_starts,
             t_ends,
+            ray_indices,
+            n_rays,
             rgb_sigma_fn=rgb_sigma_fn,
             render_bkgd=self.background_color
         )
@@ -84,7 +86,7 @@ class NeRFModel(BaseModel):
         opacity, depth = opacity.squeeze(-1), depth.squeeze(-1)
 
         return {
-            'comp_rgb': rgb,
+            'comp_rgb': comp_rgb,
             'opacity': opacity,
             'depth': depth,
             'rays_valid': opacity > 0,

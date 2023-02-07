@@ -29,7 +29,7 @@ model:
   batch_image_sampling: true
   randomized: true
   ray_chunk: 4096
-  cos_anneal_end: 5000
+  cos_anneal_end: 20000
   background: random
   variance:
     init_val: 0.3
