@@ -1,6 +1,6 @@
 pytorch-lightning==1.7.7
 omegaconf==2.2.3
-nerfacc==0.2.2
+nerfacc==0.3.3
 matplotlib
 opencv-python
 imageio
