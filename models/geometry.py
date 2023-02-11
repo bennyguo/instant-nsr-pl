@@ -131,13 +131,16 @@ class VolumeSDF(BaseImplicitGeometry):
         self.grad_type = self.config.grad_type
     
     def forward(self, points, with_grad=True, with_feature=True):
-        points = scale_anything(points, (-self.radius, self.radius), (0, 1))
         with torch.inference_mode(torch.is_inference_mode_enabled() and not (with_grad and self.grad_type == 'analytic')):
             with torch.set_grad_enabled(self.training or (with_grad and self.grad_type == 'analytic')):
                 if with_grad and self.grad_type == 'analytic':
                     if not self.training:
                         points = points.clone() # points may be in inference mode, get a copy to enable grad
                     points.requires_grad_(True)
+
+                points_ = points # points in the original scale
+                points = scale_anything(points_, (-self.radius, self.radius), (0, 1)) # points normalized to (0, 1)
+                
                 out = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims).float()
                 sdf, feature = out[...,0], out
                 if 'sdf_activation' in self.config:
@@ -147,19 +150,20 @@ class VolumeSDF(BaseImplicitGeometry):
                 if with_grad:
                     if self.grad_type == 'analytic':
                         grad = torch.autograd.grad(
-                            sdf, points, grad_outputs=torch.ones_like(sdf),
+                            sdf, points_, grad_outputs=torch.ones_like(sdf),
                             create_graph=True, retain_graph=True, only_inputs=True
                         )[0]
                     elif self.grad_type == 'finite_difference':
                         eps = 0.001
-                        points_d = torch.stack([
-                            points + torch.as_tensor([eps, 0.0, 0.0]).to(points),
-                            points + torch.as_tensor([-eps, 0.0, 0.0]).to(points),
-                            points + torch.as_tensor([0.0, eps, 0.0]).to(points),
-                            points + torch.as_tensor([0.0, -eps, 0.0]).to(points),
-                            points + torch.as_tensor([0.0, 0.0, eps]).to(points),
-                            points + torch.as_tensor([0.0, 0.0, -eps]).to(points)
+                        points_d_ = torch.stack([
+                            points_ + torch.as_tensor([eps, 0.0, 0.0]).to(points_),
+                            points_ + torch.as_tensor([-eps, 0.0, 0.0]).to(points_),
+                            points_ + torch.as_tensor([0.0, eps, 0.0]).to(points_),
+                            points_ + torch.as_tensor([0.0, -eps, 0.0]).to(points_),
+                            points_ + torch.as_tensor([0.0, 0.0, eps]).to(points_),
+                            points_ + torch.as_tensor([0.0, 0.0, -eps]).to(points_)
                         ], dim=0).clamp(0, 1)
+                        points_d = scale_anything(points_d_, (-self.radius, self.radius), (0, 1))
                         points_d_sdf = self.network(self.encoding(points_d.view(-1, 3)))[...,0].view(6, *points.shape[:-1]).float()
                         grad = torch.stack([
                             0.5 * (points_d_sdf[0] - points_d_sdf[1]) / eps,
