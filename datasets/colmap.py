@@ -47,10 +47,23 @@ def get_center(pts):
     return center, pts
 
 
-def normalize_poses(poses, pts):
+def normalize_poses(poses, pts, estimate_ground=True):
     center, pts = get_center(pts)
 
-    z = F.normalize((poses[...,3] - center).mean(0), dim=0)
+    if estimate_ground:
+        # use RANSAC to estimate the ground plane in the point cloud
+        import pyransac3d as pyrsc
+        ground = pyrsc.Plane()
+        plane_eq, inliers = ground.fit(pts.numpy(), thresh=0.01) # TODO: determine thresh based on scene scale
+        plane_eq = torch.as_tensor(plane_eq) # A, B, C, D in Ax + By + Cz + D = 0
+        z = F.normalize(plane_eq[:3], dim=-1) # plane normal as up direction
+        avg_signed_distance = (torch.cat([pts, torch.ones_like(pts[...,0:1])], dim=-1) * plane_eq).sum(-1).mean()
+        if avg_signed_distance < 0:
+            z = -z # flip the direction if points lie under the plane
+    else:
+        # use the average camera pose as the up direction
+        z = F.normalize((poses[...,3] - center).mean(0), dim=0)
+
     y_ = torch.as_tensor([z[1], -z[0], 0.])
     x = F.normalize(y_.cross(z), dim=0)
     y = z.cross(x)
@@ -106,9 +119,16 @@ class ColmapDatasetBase():
         H = int(camdata[1].height)
         W = int(camdata[1].width)
 
-        w, h = self.config.img_wh
-        assert round(W / w * h) == H
+        if 'img_wh' in self.config:
+            w, h = self.config.img_wh
+            assert round(W / w * h) == H
+        elif 'img_downscale' in self.config:
+            w, h = int(W / self.config.img_downscale + 0.5), int(H // self.config.img_downscale + 0.5)
+        else:
+            raise KeyError("Either img_wh or img_downscale should be specified.")
+
         self.w, self.h = w, h
+        self.img_wh = (self.w, self.h)
         self.factor = w / W
 
         if camdata[1].model == 'SIMPLE_RADIAL':
@@ -141,14 +161,14 @@ class ColmapDatasetBase():
             if self.split in ['train', 'val']:
                 img_path = os.path.join(self.config.root_dir, 'images', d.name)
                 img = Image.open(img_path)
-                img = img.resize(self.config.img_wh, Image.BICUBIC)
+                img = img.resize(self.img_wh, Image.BICUBIC)
                 img = TF.to_tensor(img).permute(1, 2, 0)[...,:3]
                 if self.use_mask:
                     mask_paths = [os.path.join(mask_dir, d.name), os.path.join(mask_dir, d.name[3:])]
                     mask_paths = list(filter(os.path.exists, mask_paths))
                     assert len(mask_paths) == 1
                     mask = Image.open(mask_paths[0]).convert('L') # (H, W, 1)
-                    mask = mask.resize(self.config.img_wh, Image.BICUBIC)
+                    mask = mask.resize(self.img_wh, Image.BICUBIC)
                     mask = TF.to_tensor(mask)[0]
                 else:
                     mask = torch.ones_like(img[...,0])
@@ -160,7 +180,7 @@ class ColmapDatasetBase():
         pts3d = read_points3d_binary(os.path.join(self.config.root_dir, 'sparse/0/points3D.bin'))
         pts3d = torch.from_numpy(np.array([pts3d[k].xyz for k in pts3d])).float()
 
-        self.all_c2w, pts3d = normalize_poses(self.all_c2w, pts3d)
+        self.all_c2w, pts3d = normalize_poses(self.all_c2w, pts3d, estimate_ground=self.config.estimate_ground)
 
         if self.split == 'test':
             self.all_c2w = create_spheric_poses(self.all_c2w[:,:,3], n_steps=self.config.n_test_traj_steps)
@@ -193,6 +213,8 @@ class ColmapDatasetBase():
         
         open('cameras.txt', 'w').write('\n'.join(pts_out))
         open('scene.txt', 'w').write('\n'.join([' '.join([str(p) for p in l]) + ' 0.0 0.0 0.0' for l in pts3d.view(-1, 3).tolist()]))
+
+        exit(1)
         """
 
         self.all_c2w, self.all_images, self.all_fg_masks = \

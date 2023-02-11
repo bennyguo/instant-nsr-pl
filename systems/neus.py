@@ -59,9 +59,9 @@ class NeuSSystem(BaseSystem):
         rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
         if stage in ['train']:
-            if self.config.model.background == 'white':
+            if self.config.model.background_color == 'white':
                 self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
-            elif self.config.model.background == 'random':
+            elif self.config.model.background_color == 'random':
                 self.model.background_color = torch.rand((3,), dtype=torch.float32, device=self.rank)
             else:
                 raise NotImplementedError
@@ -140,7 +140,7 @@ class NeuSSystem(BaseSystem):
     def validation_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
-        W, H = self.config.dataset.img_wh
+        W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
             {'type': 'rgb', 'img': out['comp_rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
@@ -177,7 +177,7 @@ class NeuSSystem(BaseSystem):
     def test_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
-        W, H = self.config.dataset.img_wh
+        W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-test/{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
             {'type': 'rgb', 'img': out['comp_rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},

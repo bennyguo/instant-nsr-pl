@@ -9,6 +9,7 @@ dataset:
   img_wh:
     - 800
     - 800
+  # img_downscale: 1 # specify training image size by either img_wh or img_downscale
   near_plane: 2.0
   far_plane: 6.0
   spheric_poses: false
@@ -30,7 +31,8 @@ model:
   randomized: true
   ray_chunk: 4096
   cos_anneal_end: 20000
-  background: random
+  learned_background: false
+  background_color: random
   variance:
     init_val: 0.3
     modulate: false

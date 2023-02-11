@@ -4,26 +4,27 @@ seed: 42
 
 dataset:
   name: colmap
-  root_dir: ./load/DTU/scan65
-  img_wh:
-    - 800
-    - 600
-  use_mask: true # if true, crop out the foreground region; only effective when root_dir/masks folder exists    
+  scene: ???
+  root_dir: ./load/unbounded360/${dataset.scene}
+  img_downscale: 4 # specify training image size by either img_wh or img_downscale
+  estimate_ground: true # if true, use estimated ground plane normal direction as up direction
+  use_mask: false # if true, crop out the foreground region; only effective when root_dir/masks folder exists    
   use_pixel_centers: true
   n_test_traj_steps: 120
 
 model:
   name: nerf
-  radius: 0.5
-  num_samples_per_ray: 1024
-  train_num_rays: 256
+  radius: 1.0
+  num_samples_per_ray: 2048
+  train_num_rays: 128
   max_train_num_rays: 8192
   grid_prune: true
   dynamic_ray_sampling: true
   batch_image_sampling: true
   randomized: true
-  ray_chunk: 32768
-  background: random
+  ray_chunk: 16384
+  learned_background: true
+  background_color: random
   geometry:
     name: volume-density
     radius: ${model.radius}
@@ -32,7 +33,7 @@ model:
     density_bias: -1
     isosurface:
       method: mc
-      resolution: 512
+      resolution: 256
       chunk: 2097152
       threshold: 5.0
     xyz_encoding_config:
@@ -65,7 +66,7 @@ system:
   name: nerf-system
   loss:
     lambda_rgb: 1.
-    lambda_opaque: 0.
+    lambda_distortion: 0.001
   optimizer:
     name: Adam
     args:
@@ -87,7 +88,7 @@ trainer:
   max_steps: 20000
   log_every_n_steps: 200
   num_sanity_val_steps: 0
-  val_check_interval: 10000
+  val_check_interval: 5000
   limit_train_batches: 1.0
   limit_val_batches: 2
   enable_progress_bar: true 

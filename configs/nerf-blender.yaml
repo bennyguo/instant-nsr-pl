@@ -9,6 +9,7 @@ dataset:
   img_wh:
     - 800
     - 800
+  # img_downscale: 1 # specify training image size by either img_wh or img_downscale
   near_plane: 2.0
   far_plane: 6.0
   spheric_poses: false
@@ -28,7 +29,8 @@ model:
   batch_image_sampling: true
   randomized: true
   ray_chunk: 32768
-  background: random
+  learned_background: false
+  background_color: random
   geometry:
     name: volume-density
     radius: ${model.radius}
@@ -37,7 +39,7 @@ model:
     density_bias: -1
     isosurface:
       method: mc
-      resolution: 512
+      resolution: 256
       chunk: 2097152
       threshold: 5.0
     xyz_encoding_config:
@@ -70,7 +72,7 @@ system:
   name: nerf-system
   loss:
     lambda_rgb: 1.
-    lambda_opaque: 0.
+    lambda_distortion: 0.
   optimizer:
     name: Adam
     args:

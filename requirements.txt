@@ -7,3 +7,5 @@ imageio
 imageio-ffmpeg
 scipy
 PyMCubes
+pyransac3d
+torch_efficient_distloss

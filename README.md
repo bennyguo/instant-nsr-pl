@@ -17,6 +17,8 @@ This repository contains a concise and extensible implementation of NeRF and Neu
 
 **Please subscribe to [#26](https://github.com/bennyguo/instant-nsr-pl/issues/26) for our latest findings on quality improvements!**
 
+## News
+- 02/11/2022: NeRF model now supports unbounded 360 scenes with learned background. You could try on [MipNeRF 360 data](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip) following [the COLMAP configuration](https://github.com/bennyguo/instant-nsr-pl#training-on-custom-colmap-data).
 
 ## Requirements
 **Note:**
@@ -51,10 +53,9 @@ To get COLMAP data from custom images, you should have COLMAP installed (see [he
 ```bash
 python scripts/imgs2poses.py ./load/bmvs_dog # images are in ./load/bmvs_dog/images
 ```
-Existing data following this file structure also works as long as images are store in `images/` and there is a `sparse/` folder for the COLMAP output. An optional `masks/` folder could be provided for mask supervision. To train on COLMAP data, please refer to the example config files `config/*-colmap.yaml`. Some notes:
-- Adapt the `root_dir` and `img_wh` option in the config file to your data;
-- The scene is normalized so that cameras have an minimum distance `1.0` to the center of the scene, therefore `radius` is default to `0.5` in the config file. You should consider increase `radius` if the cameras are to close to the object.
-- Background model is not yet implemented, so it works best on 360 captures with known foreground masks.
+Existing data following this file structure also works as long as images are store in `images/` and there is a `sparse/` folder for the COLMAP output, for example [the data provided by MipNeRF 360](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip). An optional `masks/` folder could be provided for object mask supervision. To train on COLMAP data, please refer to the example config files `config/*-colmap.yaml`. Some notes:
+- Adapt the `root_dir` and `img_wh` (or `img_downscale`) option in the config file to your data;
+- The scene is normalized so that cameras have an minimum distance `1.0` to the center of the scene, therefore `radius` is default to `1.0` in the config file.
 
 ### Testing
 The training precedure are by default followed by testing, which computes metrics on test data, generates animations and exports the geometry as triangular meshes. If you want to do testing alone, just resume the pretrained model and replace `--train` with `--test`, for example:

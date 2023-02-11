@@ -9,6 +9,22 @@ import models
 from models.base import BaseModel
 from models.utils import scale_anything, get_activation, cleanup, chunk_batch
 from models.network_utils import get_encoding, get_mlp, get_encoding_with_network
+from nerfacc import ContractionType
+
+
+def contract_to_unisphere(x, radius, contraction_type):
+    if contraction_type == ContractionType.AABB:
+        x = scale_anything(x, (-radius, radius), (0, 1))
+    elif contraction_type == ContractionType.UN_BOUNDED_SPHERE:
+        x = scale_anything(x, (-radius, radius), (0, 1))
+        x = x * 2 - 1  # aabb is at [-1, 1]
+        mag = x.norm(dim=-1, keepdim=True)
+        mask = mag.squeeze(-1) > 1
+        x[mask] = (2 - 1 / mag[mask]) * (x[mask] / mag[mask])
+        x = x / 4 + 0.5  # [-inf, inf] is at [0, 1]
+    else:
+        raise NotImplementedError
+    return x
 
 
 class MarchingCubeHelper(nn.Module):
@@ -56,6 +72,8 @@ class BaseImplicitGeometry(BaseModel):
             if self.config.isosurface.method == 'mc-torch':
                 raise NotImplementedError("Please do not use mc-torch. It currently has some scaling issues I haven't fixed yet.")
             self.helper = MarchingCubeHelper(self.config.isosurface.resolution, use_torch=self.config.isosurface.method=='mc-torch')   
+        self.radius = self.config.radius
+        self.contraction_type = None # assigned in system
 
     def forward_level(self, points):
         raise NotImplementedError
@@ -100,10 +118,9 @@ class VolumeDensity(BaseImplicitGeometry):
         self.n_input_dims = self.config.get('n_input_dims', 3)
         self.n_output_dims = self.config.feature_dim
         self.encoding_with_network = get_encoding_with_network(self.n_input_dims, self.n_output_dims, self.config.xyz_encoding_config, self.config.mlp_network_config)
-        self.radius = self.config.radius
     
     def forward(self, points):
-        points = scale_anything(points, (-self.radius, self.radius), (0, 1))
+        points = contract_to_unisphere(points, self.radius, self.contraction_type)
         out = self.encoding_with_network(points.view(-1, self.n_input_dims)).view(*points.shape[:-1], self.n_output_dims).float()
         density, feature = out[...,0], out
         if 'density_activation' in self.config:
@@ -113,7 +130,7 @@ class VolumeDensity(BaseImplicitGeometry):
         return density, feature
     
     def forward_level(self, points):
-        points = scale_anything(points, (-self.radius, self.radius), (0, 1))
+        points = contract_to_unisphere(points, self.radius, self.contraction_type)
         density = self.encoding_with_network(points.reshape(-1, self.n_input_dims)).reshape(*points.shape[:-1], self.n_output_dims)[...,0]
         if 'density_activation' in self.config:
             density = get_activation(self.config.density_activation)(density + float(self.config.density_bias))
@@ -127,7 +144,6 @@ class VolumeSDF(BaseImplicitGeometry):
         encoding = get_encoding(3, self.config.xyz_encoding_config)
         network = get_mlp(encoding.n_output_dims, self.n_output_dims, self.config.mlp_network_config)
         self.encoding, self.network = encoding, network
-        self.radius = self.config.radius
         self.grad_type = self.config.grad_type
     
     def forward(self, points, with_grad=True, with_feature=True):

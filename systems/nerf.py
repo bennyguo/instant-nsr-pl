@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_efficient_distloss import flatten_eff_distloss
 
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.rank_zero import rank_zero_info, rank_zero_debug
@@ -59,9 +60,9 @@ class NeRFSystem(BaseSystem):
         rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
         if stage in ['train']:
-            if self.config.model.background == 'white':
+            if self.config.model.background_color == 'white':
                 self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
-            elif self.config.model.background == 'random':
+            elif self.config.model.background_color == 'random':
                 self.model.background_color = torch.rand((3,), dtype=torch.float32, device=self.rank)
             else:
                 raise NotImplementedError
@@ -89,6 +90,13 @@ class NeRFSystem(BaseSystem):
         loss_rgb = F.smooth_l1_loss(out['comp_rgb'][out['rays_valid']], batch['rgb'][out['rays_valid']])
         self.log('train/loss_rgb', loss_rgb)
         loss += loss_rgb * self.C(self.config.system.loss.lambda_rgb)
+
+        # distortion loss proposed in MipNeRF360
+        # an efficient implementation from https://github.com/sunset1995/torch_efficient_distloss, but still slows down training by ~30%
+        if self.C(self.config.system.loss.lambda_distortion) > 0:
+            loss_distortion = flatten_eff_distloss(out['weights'], out['points'], out['intervals'], out['ray_indices'])
+            self.log('train/loss_distortion', loss_distortion)
+            loss += loss_distortion * self.C(self.config.system.loss.lambda_distortion)
 
         losses_model_reg = self.model.regularizations(out)
         for name, value in losses_model_reg.items():
@@ -121,7 +129,7 @@ class NeRFSystem(BaseSystem):
     def validation_step(self, batch, batch_idx):
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
-        W, H = self.config.dataset.img_wh
+        W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
             {'type': 'rgb', 'img': out['comp_rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
@@ -158,7 +166,7 @@ class NeRFSystem(BaseSystem):
     def test_step(self, batch, batch_idx):  
         out = self(batch)
         psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
-        W, H = self.config.dataset.img_wh
+        W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-test/{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
             {'type': 'rgb', 'img': out['comp_rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},

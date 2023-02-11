@@ -31,10 +31,16 @@ class BlenderDatasetBase():
         else:
             W, H = 800, 800
 
-        w, h = self.config.img_wh
-        assert round(W / w * h) == H
+        if 'img_wh' in self.config:
+            w, h = self.config.img_wh
+            assert round(W / w * h) == H
+        elif 'img_downscale' in self.config:
+            w, h = W // self.config.img_downscale, H // self.config.img_downscale
+        else:
+            raise KeyError("Either img_wh or img_downscale should be specified.")
         
         self.w, self.h = w, h
+        self.img_wh = (self.w, self.h)
 
         self.near, self.far = self.config.near_plane, self.config.far_plane
 
@@ -52,7 +58,7 @@ class BlenderDatasetBase():
 
             img_path = os.path.join(self.config.root_dir, f"{frame['file_path']}.png")
             img = Image.open(img_path)
-            img = img.resize(self.config.img_wh, Image.BICUBIC)
+            img = img.resize(self.img_wh, Image.BICUBIC)
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
 
             self.all_fg_masks.append(img[..., -1]) # (h, w)
