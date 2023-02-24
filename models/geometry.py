@@ -46,7 +46,7 @@ class MarchingCubeHelper(nn.Module):
             x, y, z = torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range, self.resolution)
             x, y, z = torch.meshgrid(x, y, z)
             verts = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1), z.reshape(-1, 1)], dim=-1).reshape(-1, 3)
-            self.verts = verts.to(_get_rank())
+            self.verts = verts
         return self.verts
 
     def forward(self, level, threshold=0.):
@@ -79,19 +79,17 @@ class BaseImplicitGeometry(BaseModel):
         raise NotImplementedError
     
     def isosurface_(self, vmin, vmax):
-        grid_verts = self.helper.grid_vertices()
-        grid_verts = torch.stack([
-            scale_anything(grid_verts[...,0], (0, 1), (vmin[0], vmax[0])),
-            scale_anything(grid_verts[...,1], (0, 1), (vmin[1], vmax[1])),
-            scale_anything(grid_verts[...,2], (0, 1), (vmin[2], vmax[2]))
-        ], dim=-1)
-
         def batch_func(x):
+            x = torch.stack([
+                scale_anything(x[...,0], (0, 1), (vmin[0], vmax[0])),
+                scale_anything(x[...,1], (0, 1), (vmin[1], vmax[1])),
+                scale_anything(x[...,2], (0, 1), (vmin[2], vmax[2])),
+            ], dim=-1).to(self.rank)
             rv = self.forward_level(x).cpu()
             cleanup()
             return rv
         
-        level = chunk_batch(batch_func, self.config.isosurface.chunk, grid_verts)
+        level = chunk_batch(batch_func, self.config.isosurface.chunk, self.helper.grid_vertices())
         mesh = self.helper(level, threshold=self.config.isosurface.threshold)
         mesh['v_pos'] = torch.stack([
             scale_anything(mesh['v_pos'][...,0], (0, 1), (vmin[0], vmax[0])),
