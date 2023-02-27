@@ -9,6 +9,7 @@ from models.utils import scale_anything, get_activation, cleanup, chunk_batch
 from models.network_utils import get_encoding, get_mlp, get_encoding_with_network
 from systems.utils import update_module_step
 from utils.misc import get_rank
+from systems.utils import update_module_step
 from nerfacc import ContractionType
 
 
