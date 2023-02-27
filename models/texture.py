@@ -4,6 +4,7 @@ import torch.nn as nn
 import models
 from models.utils import get_activation
 from models.network_utils import get_encoding, get_mlp
+from systems.utils import update_module_step
 
 
 @models.register('volume-radiance')
@@ -29,8 +30,7 @@ class VolumeRadiance(nn.Module):
         return color
 
     def update_step(self, epoch, global_step):
-        if hasattr(self.encoding, 'update_step'):
-            self.encoding.update_step(epoch, global_step)
+        update_module_step(self.encoding, epoch, global_step)
 
     def regularizations(self, out):
         return {}

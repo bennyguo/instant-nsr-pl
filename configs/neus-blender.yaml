@@ -85,6 +85,8 @@ system:
     lambda_mask: 0.1
     lambda_eikonal: 0.1
     lambda_sparsity: 0.01
+    lambda_distortion: 0.
+    lambda_opaque: 0.
     sparsity_scale: 1.
   optimizer:
     name: Adam

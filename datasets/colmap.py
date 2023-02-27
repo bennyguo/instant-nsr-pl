@@ -57,8 +57,10 @@ def normalize_poses(poses, pts, estimate_ground=True):
         plane_eq, inliers = ground.fit(pts.numpy(), thresh=0.01) # TODO: determine thresh based on scene scale
         plane_eq = torch.as_tensor(plane_eq) # A, B, C, D in Ax + By + Cz + D = 0
         z = F.normalize(plane_eq[:3], dim=-1) # plane normal as up direction
-        avg_signed_distance = (torch.cat([pts, torch.ones_like(pts[...,0:1])], dim=-1) * plane_eq).sum(-1).mean()
-        if avg_signed_distance < 0:
+        signed_distance = (torch.cat([pts, torch.ones_like(pts[...,0:1])], dim=-1) * plane_eq).sum(-1)
+        pts = pts[signed_distance.abs() > 0.01] # remove ground points
+        center = pts.mean(0) # estimate new scene center
+        if signed_distance.mean() < 0:
             z = -z # flip the direction if points lie under the plane
     else:
         # use the average camera pose as the up direction
@@ -255,11 +257,11 @@ class ColmapDataModule(pl.LightningDataModule):
         if stage in [None, 'fit']:
             self.train_dataset = ColmapIterableDataset(self.config, 'train')
         if stage in [None, 'fit', 'validate']:
-            self.val_dataset = ColmapDataset(self.config, 'val')
+            self.val_dataset = ColmapDataset(self.config, self.config.get('val_split', 'train'))
         if stage in [None, 'test']:
-            self.test_dataset = ColmapDataset(self.config, 'test')
+            self.test_dataset = ColmapDataset(self.config, self.config.get('test_split', 'test'))
         if stage in [None, 'predict']:
-            self.predict_dataset = ColmapDataset(self.config, 'train')            
+            self.predict_dataset = ColmapDataset(self.config, 'train')         
 
     def prepare_data(self):
         pass

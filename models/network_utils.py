@@ -9,6 +9,7 @@ from pytorch_lightning.utilities.rank_zero import rank_zero_debug, _get_rank
 
 from utils.misc import config_to_primitive
 from models.utils import get_activation
+from systems.utils import update_module_step
 
 
 
@@ -38,6 +39,34 @@ class VanillaFrequency(nn.Module):
             rank_zero_debug(f'Update mask: {global_step}/{self.n_masking_step} {self.mask}')
 
 
+class ProgressiveBandHashGrid(nn.Module):
+    def __init__(self, in_channels, config):
+        super().__init__()
+        self.n_input_dims = in_channels
+        encoding_config = config.copy()
+        encoding_config['otype'] = 'HashGrid'
+        with torch.cuda.device(_get_rank()):
+            self.encoding = tcnn.Encoding(in_channels, encoding_config)
+        self.n_output_dims = self.encoding.n_output_dims
+        self.n_level = config['n_levels']
+        self.n_features_per_level = config['n_features_per_level']
+        self.start_level, self.start_step, self.update_steps = config['start_level'], config['start_step'], config['update_steps']
+        self.current_level = self.start_level
+        self.mask = torch.zeros(self.n_level * self.n_features_per_level, dtype=torch.float32, device=_get_rank())
+
+    def forward(self, x):
+        enc = self.encoding(x)
+        enc = enc * self.mask
+        return enc
+
+    def update_step(self, epoch, global_step):
+        current_level = min(self.start_level + max(global_step - self.start_step, 0) // self.update_steps, self.n_level)
+        if current_level > self.current_level:
+            rank_zero_debug(f'Update current level to {current_level}')
+        self.current_level = current_level
+        self.mask[:self.current_level * self.n_features_per_level] = 1.
+
+
 class CompositeEncoding(nn.Module):
     def __init__(self, encoding, include_xyz=False, xyz_scale=1., xyz_offset=0.):
         super(CompositeEncoding, self).__init__()
@@ -48,11 +77,16 @@ class CompositeEncoding(nn.Module):
     def forward(self, x, *args):
         return self.encoding(x, *args) if not self.include_xyz else torch.cat([x * self.xyz_scale + self.xyz_offset, self.encoding(x, *args)], dim=-1)
 
+    def update_step(self, epoch, global_step):
+        update_module_step(self.encoding, epoch, global_step)
+
 
 def get_encoding(n_input_dims, config):
     # input suppose to be range [0, 1]
     if config.otype == 'VanillaFrequency':
         encoding = VanillaFrequency(n_input_dims, config_to_primitive(config))
+    elif config.otype == 'ProgressiveBandHashGrid':
+        encoding = ProgressiveBandHashGrid(n_input_dims, config_to_primitive(config))
     else:
         with torch.cuda.device(_get_rank()):
             encoding = tcnn.Encoding(n_input_dims, config_to_primitive(config))
@@ -151,16 +185,26 @@ def get_mlp(n_input_dims, n_output_dims, config):
     return network
 
 
+class EncodingWithNetwork(nn.Module):
+    def __init__(self, encoding, network):
+        super().__init__()
+        self.encoding, self.network = encoding, network
+    
+    def forward(self, x):
+        return self.network(self.encoding(x))
+    
+    def update_step(self, epoch, global_step):
+        update_module_step(self.encoding, epoch, global_step)
+        update_module_step(self.network, epoch, global_step)
+
+
 def get_encoding_with_network(n_input_dims, n_output_dims, encoding_config, network_config):
     # input suppose to be range [0, 1]
-    if encoding_config.otype in ['VanillaFrequency'] \
+    if encoding_config.otype in ['VanillaFrequency', 'ProgressiveBandHashGrid'] \
         or network_config.otype in ['VanillaMLP']:
         encoding = get_encoding(n_input_dims, encoding_config)
         network = get_mlp(encoding.n_output_dims, n_output_dims, network_config)
-        encoding_with_network = nn.Sequential(
-            encoding,
-            network
-        )
+        encoding_with_network = EncodingWithNetwork(encoding, network)
     else:
         with torch.cuda.device(_get_rank()):
             encoding_with_network = tcnn.NetworkWithInputEncoding(

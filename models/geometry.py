@@ -9,6 +9,7 @@ import models
 from models.base import BaseModel
 from models.utils import scale_anything, get_activation, cleanup, chunk_batch
 from models.network_utils import get_encoding, get_mlp, get_encoding_with_network
+from systems.utils import update_module_step
 from nerfacc import ContractionType
 
 
@@ -107,7 +108,7 @@ class BaseImplicitGeometry(BaseModel):
         vmin_ = (vmin - (vmax - vmin) * 0.1).clamp(-self.radius, self.radius)
         vmax_ = (vmax + (vmax - vmin) * 0.1).clamp(-self.radius, self.radius)
         mesh_fine = self.isosurface_(vmin_, vmax_)
-        return mesh_fine
+        return mesh_fine 
 
 
 @models.register('volume-density')
@@ -133,6 +134,9 @@ class VolumeDensity(BaseImplicitGeometry):
         if 'density_activation' in self.config:
             density = get_activation(self.config.density_activation)(density + float(self.config.density_bias))
         return -density      
+    
+    def update_step(self, epoch, global_step):
+        update_module_step(self.encoding_with_network, epoch, global_step)
 
 
 @models.register('volume-sdf')
@@ -153,7 +157,7 @@ class VolumeSDF(BaseImplicitGeometry):
                     points.requires_grad_(True)
 
                 points_ = points # points in the original scale
-                points = scale_anything(points_, (-self.radius, self.radius), (0, 1)) # points normalized to (0, 1)
+                points = contract_to_unisphere(points, self.radius, self.contraction_type) # points normalized to (0, 1)
                 
                 out = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims).float()
                 sdf, feature = out[...,0], out
@@ -194,8 +198,12 @@ class VolumeSDF(BaseImplicitGeometry):
         return rv[0] if len(rv) == 1 else rv
     
     def forward_level(self, points):
-        points = scale_anything(points, (-self.radius, self.radius), (0, 1))
+        points = contract_to_unisphere(points, self.radius, self.contraction_type) # points normalized to (0, 1)
         sdf = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims)[...,0]
         if 'sdf_activation' in self.config:
             sdf = get_activation(self.config.sdf_activation)(sdf + float(self.config.sdf_bias))
         return sdf        
+    
+    def update_step(self, epoch, global_step):
+        update_module_step(self.encoding, epoch, global_step)    
+        update_module_step(self.network, epoch, global_step)    
