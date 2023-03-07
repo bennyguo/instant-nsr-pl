@@ -34,7 +34,7 @@ This repository contains a concise and extensible implementation of NeRF and Neu
 ### Training on NeRF-Synthetic
 Download the NeRF-Synthetic data [here](https://drive.google.com/drive/folders/128yBriW1IG_3NJ5Rp7APSTZsJqdJdfc1) and put it under `load/`. The file structure should be like `load/nerf_synthetic/lego`.
 
-Run the launch script with `--train`, specifying the config file, the GPU(s) to be used (GPU 0 will be used by default), and the scece name:
+Run the launch script with `--train`, specifying the config file, the GPU(s) to be used (GPU 0 will be used by default), and the scene name:
 ```bash
 # train NeRF
 python launch.py --config configs/nerf-blender.yaml --gpu 0 --train dataset.scene=lego tag=example
@@ -44,7 +44,7 @@ python launch.py --config configs/neus-blender.yaml --gpu 0 --train dataset.scen
 # train NeuS without mask
 python launch.py --config configs/neus-blender.yaml --gpu 0 --train dataset.scene=lego tag=example system.loss.lambda_mask=0.0
 ```
-The code snapshots, checkpoints and experiment outputs are saved to `exp/[name]/[tag]@[timestamp]`, and tensorboard logs can be found at `runs/[name]/[tag]@[timestamp]`. You can change any configuration in the YAML file by specifying arguments without `--`, for exmaple:
+The code snapshots, checkpoints and experiment outputs are saved to `exp/[name]/[tag]@[timestamp]`, and tensorboard logs can be found at `runs/[name]/[tag]@[timestamp]`. You can change any configuration in the YAML file by specifying arguments without `--`, for example:
 ```bash
 python launch.py --config configs/nerf-blender.yaml --gpu 0 --train dataset.scene=lego tag=iter50k seed=0 trainer.max_steps=50000
 ```
@@ -55,10 +55,10 @@ python scripts/imgs2poses.py ./load/bmvs_dog # images are in ./load/bmvs_dog/ima
 ```
 Existing data following this file structure also works as long as images are store in `images/` and there is a `sparse/` folder for the COLMAP output, for example [the data provided by MipNeRF 360](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip). An optional `masks/` folder could be provided for object mask supervision. To train on COLMAP data, please refer to the example config files `config/*-colmap.yaml`. Some notes:
 - Adapt the `root_dir` and `img_wh` (or `img_downscale`) option in the config file to your data;
-- The scene is normalized so that cameras have an minimum distance `1.0` to the center of the scene, therefore `radius` is default to `1.0` in the config file.
+- The scene is normalized so that cameras have a minimum distance `1.0` to the center of the scene, therefore `radius` is default to `1.0` in the config file.
 
 ### Testing
-The training precedure are by default followed by testing, which computes metrics on test data, generates animations and exports the geometry as triangular meshes. If you want to do testing alone, just resume the pretrained model and replace `--train` with `--test`, for example:
+The training procedure are by default followed by testing, which computes metrics on test data, generates animations and exports the geometry as triangular meshes. If you want to do testing alone, just resume the pretrained model and replace `--train` with `--test`, for example:
 ```bash
 python launch.py --config path/to/your/exp/config/parsed.yaml --resume path/to/your/exp/ckpt/epoch=0-step=20000.ckpt --gpu 0 --test
 ```
