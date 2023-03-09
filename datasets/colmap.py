@@ -1,5 +1,4 @@
 import os
-import json
 import math
 import numpy as np
 from PIL import Image
@@ -10,29 +9,10 @@ from torch.utils.data import Dataset, DataLoader, IterableDataset
 import torchvision.transforms.functional as TF
 
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import _get_rank
 
 import datasets
 from datasets.colmap_utils import \
     read_cameras_binary, read_images_binary, read_points3d_binary
-from models.ray_utils import get_ray_directions
-
-
-
-import os
-import json
-import math
-import numpy as np
-from PIL import Image
-
-import torch
-from torch.utils.data import Dataset, DataLoader, IterableDataset
-import torchvision.transforms.functional as TF
-
-import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import _get_rank
-
-import datasets
 from models.ray_utils import get_ray_directions
 
 
@@ -112,7 +92,6 @@ class ColmapDatasetBase():
     def setup(self, config, split):
         self.config = config
         self.split = split
-        self.rank = _get_rank()
 
         camdata = read_cameras_binary(os.path.join(self.config.root_dir, 'sparse/0/cameras.bin'))
 
@@ -143,7 +122,7 @@ class ColmapDatasetBase():
         else:
             raise ValueError(f"Please parse the intrinsics for camera model {camdata[1].model}!")
         
-        self.directions = get_ray_directions(w, h, fx, fy, cx, cy).to(self.rank)
+        self.directions = get_ray_directions(w, h, fx, fy, cx, cy)
 
         imdata = read_images_binary(os.path.join(self.config.root_dir, 'sparse/0/images.bin'))
 
@@ -218,9 +197,9 @@ class ColmapDatasetBase():
         """
 
         self.all_c2w, self.all_images, self.all_fg_masks = \
-            self.all_c2w.float().to(self.rank), \
-            self.all_images.float().to(self.rank), \
-            self.all_fg_masks.float().to(self.rank)
+            self.all_c2w.float(), \
+            self.all_images.float(), \
+            self.all_fg_masks.float()
         
 
 class ColmapDataset(Dataset, ColmapDatasetBase):

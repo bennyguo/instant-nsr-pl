@@ -9,7 +9,6 @@ from torch.utils.data import Dataset, DataLoader, IterableDataset
 import torchvision.transforms.functional as TF
 
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import _get_rank
 
 import datasets
 from models.ray_utils import get_ray_directions
@@ -19,7 +18,6 @@ class BlenderDatasetBase():
     def setup(self, config, split):
         self.config = config
         self.split = split
-        self.rank = _get_rank()
 
         self.use_mask = True
 
@@ -48,7 +46,7 @@ class BlenderDatasetBase():
 
         # ray directions for all pixels, same for all images (same H, W, focal)
         self.directions = \
-            get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2, self.config.use_pixel_centers).to(self.rank) # (h, w, 3)           
+            get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2, self.config.use_pixel_centers) # (h, w, 3)           
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 
@@ -65,9 +63,9 @@ class BlenderDatasetBase():
             self.all_images.append(img[...,:3])
 
         self.all_c2w, self.all_images, self.all_fg_masks = \
-            torch.stack(self.all_c2w, dim=0).float().to(self.rank), \
-            torch.stack(self.all_images, dim=0).float().to(self.rank), \
-            torch.stack(self.all_fg_masks, dim=0).float().to(self.rank)
+            torch.stack(self.all_c2w, dim=0).float(), \
+            torch.stack(self.all_images, dim=0).float(), \
+            torch.stack(self.all_fg_masks, dim=0).float()
         
 
 class BlenderDataset(Dataset, BlenderDatasetBase):

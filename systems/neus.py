@@ -34,16 +34,16 @@ class NeuSSystem(BaseSystem):
             index = batch['index']
         else:
             if self.config.model.batch_image_sampling:
-                index = torch.randint(0, len(self.dataset.all_images), size=(self.train_num_rays,), device=self.dataset.all_images.device)
+                index = torch.randint(0, len(self.dataset.all_images), size=(self.train_num_rays,))
             else:
-                index = torch.randint(0, len(self.dataset.all_images), size=(1,), device=self.dataset.all_images.device)
+                index = torch.randint(0, len(self.dataset.all_images), size=(1,))
         if stage in ['train']:
             c2w = self.dataset.all_c2w[index]
             x = torch.randint(
-                0, self.dataset.w, size=(self.train_num_rays,), device=self.dataset.all_images.device
+                0, self.dataset.w, size=(self.train_num_rays,)
             )
             y = torch.randint(
-                0, self.dataset.h, size=(self.train_num_rays,), device=self.dataset.all_images.device
+                0, self.dataset.h, size=(self.train_num_rays,)
             )
             directions = self.dataset.directions[y, x]
             rays_o, rays_d = get_rays(directions, c2w)
@@ -60,20 +60,22 @@ class NeuSSystem(BaseSystem):
 
         if stage in ['train']:
             if self.config.model.background_color == 'white':
-                self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
+                self.model.background_color = torch.ones((3,), dtype=torch.float32)
             elif self.config.model.background_color == 'random':
-                self.model.background_color = torch.rand((3,), dtype=torch.float32, device=self.rank)
+                self.model.background_color = torch.rand((3,), dtype=torch.float32)
             else:
                 raise NotImplementedError
         else:
-            self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
+            self.model.background_color = torch.ones((3,), dtype=torch.float32)
         
         rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])
+
+        self.model.background_color = self.model.background_color.to(self.device)
         
         batch.update({
-            'rays': rays,
-            'rgb': rgb,
-            'fg_mask': fg_mask
+            'rays': rays.to(self.device),
+            'rgb': rgb.to(self.device),
+            'fg_mask': fg_mask.to(self.device)
         })      
     
     def training_step(self, batch, batch_idx):
