@@ -39,10 +39,12 @@ def normalize_poses(poses, pts, estimate_ground=True):
         plane_eq = torch.as_tensor(plane_eq) # A, B, C, D in Ax + By + Cz + D = 0
         z = F.normalize(plane_eq[:3], dim=-1) # plane normal as up direction
         signed_distance = (torch.cat([pts, torch.ones_like(pts[...,0:1])], dim=-1) * plane_eq).sum(-1)
-        pts = pts[signed_distance.abs() > 0.01] # remove ground points
-        center = pts.mean(0) # estimate new scene center
         if signed_distance.mean() < 0:
+            pts = pts[-signed_distance > 0.01] # remove ground points
             z = -z # flip the direction if points lie under the plane
+        else:
+            pts = pts[signed_distance > 0.01] # remove ground points
+        center = pts.mean(0) # estimate new scene center
     else:
         # use the average camera pose as the up direction
         z = F.normalize((poses[...,3] - center).mean(0), dim=0)
