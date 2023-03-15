@@ -44,7 +44,7 @@ class MarchingCubeHelper(nn.Module):
     def grid_vertices(self):
         if self.verts is None:
             x, y, z = torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range, self.resolution), torch.linspace(*self.points_range, self.resolution)
-            x, y, z = torch.meshgrid(x, y, z, indexing='xy')
+            x, y, z = torch.meshgrid(x, y, z, indexing='ij')
             verts = torch.cat([x.reshape(-1, 1), y.reshape(-1, 1), z.reshape(-1, 1)], dim=-1).reshape(-1, 3)
             self.verts = verts
         return self.verts
