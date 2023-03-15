@@ -1,5 +1,4 @@
 import os
-import json
 import math
 import numpy as np
 from PIL import Image
@@ -10,30 +9,12 @@ from torch.utils.data import Dataset, DataLoader, IterableDataset
 import torchvision.transforms.functional as TF
 
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import _get_rank
 
 import datasets
 from datasets.colmap_utils import \
     read_cameras_binary, read_images_binary, read_points3d_binary
 from models.ray_utils import get_ray_directions
-
-
-
-import os
-import json
-import math
-import numpy as np
-from PIL import Image
-
-import torch
-from torch.utils.data import Dataset, DataLoader, IterableDataset
-import torchvision.transforms.functional as TF
-
-import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import _get_rank
-
-import datasets
-from models.ray_utils import get_ray_directions
+from utils.misc import get_rank
 
 
 def get_center(pts):
@@ -112,7 +93,7 @@ class ColmapDatasetBase():
     def setup(self, config, split):
         self.config = config
         self.split = split
-        self.rank = _get_rank()
+        self.rank = get_rank()
 
         camdata = read_cameras_binary(os.path.join(self.config.root_dir, 'sparse/0/cameras.bin'))
 

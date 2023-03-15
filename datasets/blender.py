@@ -9,17 +9,17 @@ from torch.utils.data import Dataset, DataLoader, IterableDataset
 import torchvision.transforms.functional as TF
 
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import _get_rank
 
 import datasets
 from models.ray_utils import get_ray_directions
+from utils.misc import get_rank
 
 
 class BlenderDatasetBase():
     def setup(self, config, split):
         self.config = config
         self.split = split
-        self.rank = _get_rank()
+        self.rank = get_rank()
 
         self.use_mask = True
 
