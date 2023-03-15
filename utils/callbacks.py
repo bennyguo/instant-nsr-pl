@@ -1,9 +1,14 @@
 import os
 import subprocess
 import shutil
-from utils.misc import dump_config
+from utils.misc import dump_config, parse_version
 
-from pytorch_lightning.callbacks.base import Callback
+
+import pytorch_lightning
+if parse_version(pytorch_lightning.__version__) > parse_version('1.8'):
+    from pytorch_lightning.callbacks import Callback
+else:
+    from pytorch_lightning.callbacks.base import Callback
 from pytorch_lightning.utilities.rank_zero import rank_zero_only, rank_zero_warn
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
 

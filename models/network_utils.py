@@ -5,12 +5,11 @@ import torch
 import torch.nn as nn
 import tinycudann as tcnn
 
-from pytorch_lightning.utilities.rank_zero import rank_zero_debug, _get_rank
+from pytorch_lightning.utilities.rank_zero import rank_zero_debug
 
-from utils.misc import config_to_primitive
+from utils.misc import config_to_primitive, get_rank
 from models.utils import get_activation
 from systems.utils import update_module_step
-
 
 
 class VanillaFrequency(nn.Module):
@@ -88,7 +87,7 @@ def get_encoding(n_input_dims, config):
     elif config.otype == 'ProgressiveBandHashGrid':
         encoding = ProgressiveBandHashGrid(n_input_dims, config_to_primitive(config))
     else:
-        with torch.cuda.device(_get_rank()):
+        with torch.cuda.device(get_rank()):
             encoding = tcnn.Encoding(n_input_dims, config_to_primitive(config))
     encoding = CompositeEncoding(encoding, include_xyz=config.get('include_xyz', False), xyz_scale=2., xyz_offset=-1.)
     return encoding
@@ -178,7 +177,7 @@ def get_mlp(n_input_dims, n_output_dims, config):
     if config.otype == 'VanillaMLP':
         network = VanillaMLP(n_input_dims, n_output_dims, config_to_primitive(config))
     else:
-        with torch.cuda.device(_get_rank()):
+        with torch.cuda.device(get_rank()):
             network = tcnn.Network(n_input_dims, n_output_dims, config_to_primitive(config))
             if config.get('sphere_init', False):
                 sphere_init_tcnn_network(n_input_dims, n_output_dims, config, network)
@@ -206,7 +205,7 @@ def get_encoding_with_network(n_input_dims, n_output_dims, encoding_config, netw
         network = get_mlp(encoding.n_output_dims, n_output_dims, network_config)
         encoding_with_network = EncodingWithNetwork(encoding, network)
     else:
-        with torch.cuda.device(_get_rank()):
+        with torch.cuda.device(get_rank()):
             encoding_with_network = tcnn.NetworkWithInputEncoding(
                 n_input_dims=n_input_dims,
                 n_output_dims=n_output_dims,

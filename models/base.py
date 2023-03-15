@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 
-from pytorch_lightning.utilities.rank_zero import _get_rank
+from utils.misc import get_rank
 
 class BaseModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.rank = _get_rank()
+        self.rank = get_rank()
         self.setup()
         if self.config.get('weights', None):
             self.load_state_dict(torch.load(self.config.weights))

@@ -3,13 +3,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from pytorch_lightning.utilities.rank_zero import _get_rank
-
 import models
 from models.base import BaseModel
 from models.utils import scale_anything, get_activation, cleanup, chunk_batch
 from models.network_utils import get_encoding, get_mlp, get_encoding_with_network
 from systems.utils import update_module_step
+from utils.misc import get_rank
 from nerfacc import ContractionType
 
 
@@ -53,7 +52,7 @@ class MarchingCubeHelper(nn.Module):
     def forward(self, level, threshold=0.):
         level = level.float().view(self.resolution, self.resolution, self.resolution)
         if self.use_torch:
-            verts, faces = self.mc_func(level.to(_get_rank()), threshold)
+            verts, faces = self.mc_func(level.to(get_rank()), threshold)
             verts, faces = verts.cpu(), faces.cpu().long()
         else:
             verts, faces = self.mc_func(-level.numpy(), threshold) # transform to numpy
