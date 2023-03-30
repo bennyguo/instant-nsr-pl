@@ -18,6 +18,7 @@ This repository contains a concise and extensible implementation of NeRF and Neu
 **Please subscribe to [#26](https://github.com/bennyguo/instant-nsr-pl/issues/26) for our latest findings on quality improvements!**
 
 ## News
+- 03/31/2022: NeuS model now supports background modeling. You could try on the DTU dataset provided by [NeuS](https://drive.google.com/drive/folders/1Nlzejs4mfPuJYORLbDEUDWlc9IZIbU0C?usp=sharing) or [IDR](https://www.dropbox.com/sh/5tam07ai8ch90pf/AADniBT3dmAexvm_J1oL__uoa) following [the instruction here](https://github.com/bennyguo/instant-nsr-pl#training-on-DTU).
 - 02/11/2022: NeRF model now supports unbounded 360 scenes with learned background. You could try on [MipNeRF 360 data](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip) following [the COLMAP configuration](https://github.com/bennyguo/instant-nsr-pl#training-on-custom-colmap-data).
 
 ## Requirements
@@ -48,6 +49,14 @@ The code snapshots, checkpoints and experiment outputs are saved to `exp/[name]/
 ```bash
 python launch.py --config configs/nerf-blender.yaml --gpu 0 --train dataset.scene=lego tag=iter50k seed=0 trainer.max_steps=50000
 ```
+### Training on DTU
+Download preprocessed DTU data provided by [NeuS](https://drive.google.com/drive/folders/1Nlzejs4mfPuJYORLbDEUDWlc9IZIbU0C?usp=sharing) or [IDR](https://www.dropbox.com/sh/5tam07ai8ch90pf/AADniBT3dmAexvm_J1oL__uoa). In the provided config files we assume using NeuS DTU data. If you are using IDR DTU data, please set `dataset.cameras_file=cameras.npz`. You may also need to adjust `dataset.root_dir` to point to your downloaded data location.
+```bash
+# train NeuS on DTU without mask
+python launch.py --config configs/configs/neus-dtu.yaml --gpu 0 --train
+# train NeuS on DTU with mask
+python launch.py --config configs/configs/neus-dtu.yaml --gpu 0 --train system.loss.lambda_mask=0.1
+```
 ### Training on Custom COLMAP Data
 To get COLMAP data from custom images, you should have COLMAP installed (see [here](https://colmap.github.io/install.html) for installation instructions). Then put your images in the `images/` folder, and run `scripts/imgs2poses.py` specifying the path containing the `images/` folder. For example:
 ```bash
@@ -55,7 +64,7 @@ python scripts/imgs2poses.py ./load/bmvs_dog # images are in ./load/bmvs_dog/ima
 ```
 Existing data following this file structure also works as long as images are store in `images/` and there is a `sparse/` folder for the COLMAP output, for example [the data provided by MipNeRF 360](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip). An optional `masks/` folder could be provided for object mask supervision. To train on COLMAP data, please refer to the example config files `config/*-colmap.yaml`. Some notes:
 - Adapt the `root_dir` and `img_wh` (or `img_downscale`) option in the config file to your data;
-- The scene is normalized so that cameras have a minimum distance `1.0` to the center of the scene, therefore `radius` is default to `1.0` in the config file.
+- The scene is normalized so that cameras have a minimum distance `1.0` to the center of the scene. Setting `model.radius=1.0` works in most cases. If not, try setting a smaller radius that wraps tightly to your foreground object.
 
 ### Testing
 The training procedure are by default followed by testing, which computes metrics on test data, generates animations and exports the geometry as triangular meshes. If you want to do testing alone, just resume the pretrained model and replace `--train` with `--test`, for example:
@@ -80,8 +89,8 @@ All experiments are conducted on a single NVIDIA RTX3090.
 
 
 ## TODO
-- [ ] Support more dataset formats, like ~COLMAP outputs~ and DTU
-- [ ] Support background model based on NeRF++ or Mip-NeRF360
+- [✅] Support more dataset formats, like ~COLMAP outputs~ and DTU
+- [✅] Support simple background model
 - [ ] Support GUI training and interaction
 - [ ] More illustrations about the framework
 

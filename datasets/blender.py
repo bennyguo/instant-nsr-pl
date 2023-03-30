@@ -21,7 +21,8 @@ class BlenderDatasetBase():
         self.split = split
         self.rank = get_rank()
 
-        self.use_mask = True
+        self.has_mask = True
+        self.apply_mask = True
 
         with open(os.path.join(self.config.root_dir, f"transforms_{self.split}.json"), 'r') as f:
             meta = json.load(f)
@@ -48,7 +49,7 @@ class BlenderDatasetBase():
 
         # ray directions for all pixels, same for all images (same H, W, focal)
         self.directions = \
-            get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2, self.config.use_pixel_centers).to(self.rank) # (h, w, 3)           
+            get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2).to(self.rank) # (h, w, 3)           
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 

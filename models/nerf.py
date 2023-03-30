@@ -42,7 +42,7 @@ class NeRFModel(BaseModel):
         self.background_color = None
     
     def update_step(self, epoch, global_step):
-        # progressive viewdir PE frequencies
+        update_module_step(self.geometry, epoch, global_step)
         update_module_step(self.texture, epoch, global_step)
 
         def occ_eval_fn(x):
@@ -107,8 +107,6 @@ class NeRFModel(BaseModel):
         comp_rgb = accumulate_along_rays(weights, ray_indices, values=rgb, n_rays=n_rays)
         comp_rgb = comp_rgb + self.background_color * (1.0 - opacity)       
 
-        opacity, depth = opacity.squeeze(-1), depth.squeeze(-1)
-
         out = {
             'comp_rgb': comp_rgb,
             'opacity': opacity,
@@ -131,7 +129,7 @@ class NeRFModel(BaseModel):
         if self.training:
             out = self.forward_(rays)
         else:
-            out = chunk_batch(self.forward_, self.config.ray_chunk, rays)
+            out = chunk_batch(self.forward_, self.config.ray_chunk, True, rays)
         return {
             **out,
         }

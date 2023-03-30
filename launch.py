@@ -107,6 +107,7 @@ def main():
 
     if args.train:
         if args.resume and not args.resume_weights_only:
+            # FIXME: different behavior in pytorch-lighting>1.9 ?
             trainer.fit(system, datamodule=dm, ckpt_path=args.resume)
         else:
             trainer.fit(system, datamodule=dm)
