@@ -89,7 +89,7 @@ All experiments are conducted on a single NVIDIA RTX3090.
 
 
 ## TODO
-- [✅] Support more dataset formats, like ~COLMAP outputs~ and DTU
+- [✅] Support more dataset formats, like COLMAP outputs and DTU
 - [✅] Support simple background model
 - [ ] Support GUI training and interaction
 - [ ] More illustrations about the framework
