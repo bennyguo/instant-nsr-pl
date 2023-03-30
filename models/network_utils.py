@@ -44,14 +44,14 @@ class ProgressiveBandHashGrid(nn.Module):
         self.n_input_dims = in_channels
         encoding_config = config.copy()
         encoding_config['otype'] = 'HashGrid'
-        with torch.cuda.device(_get_rank()):
+        with torch.cuda.device(get_rank()):
             self.encoding = tcnn.Encoding(in_channels, encoding_config)
         self.n_output_dims = self.encoding.n_output_dims
         self.n_level = config['n_levels']
         self.n_features_per_level = config['n_features_per_level']
         self.start_level, self.start_step, self.update_steps = config['start_level'], config['start_step'], config['update_steps']
         self.current_level = self.start_level
-        self.mask = torch.zeros(self.n_level * self.n_features_per_level, dtype=torch.float32, device=_get_rank())
+        self.mask = torch.zeros(self.n_level * self.n_features_per_level, dtype=torch.float32, device=get_rank())
 
     def forward(self, x):
         enc = self.encoding(x)

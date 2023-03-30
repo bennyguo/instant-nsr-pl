@@ -90,7 +90,7 @@ class BaseImplicitGeometry(BaseModel):
             cleanup()
             return rv
         
-        level = chunk_batch(batch_func, self.config.isosurface.chunk, self.helper.grid_vertices())
+        level = chunk_batch(batch_func, self.config.isosurface.chunk, True, self.helper.grid_vertices())
         mesh = self.helper(level, threshold=self.config.isosurface.threshold)
         mesh['v_pos'] = torch.stack([
             scale_anything(mesh['v_pos'][...,0], (0, 1), (vmin[0], vmax[0])),

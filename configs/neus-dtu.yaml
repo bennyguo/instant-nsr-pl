@@ -1,18 +1,17 @@
-name: neus-colmap-${basename:${dataset.root_dir}}
+name: neus-dtu-${basename:${dataset.root_dir}}
 tag: ''
 seed: 42
 
 dataset:
-  name: colmap
-  root_dir: ./load/unbounded360/garden
-  img_downscale: 4 # specify training image size by either img_wh or img_downscale
-  up_est_method: ground # if true, use estimated ground plane normal direction as up direction
-  center_est_method: lookat
-  n_test_traj_steps: 120
+  name: dtu
+  root_dir: ./load/DTU-neus/dtu_scan110
+  cameras_file: cameras_sphere.npz
+  img_downscale: 2 # specify training image size by either img_wh or img_downscale
+  n_test_traj_steps: 60
 
 model:
   name: neus
-  radius: 0.6
+  radius: 1.0
   num_samples_per_ray: 1024
   train_num_rays: 256
   max_train_num_rays: 8192
@@ -69,7 +68,7 @@ model:
       n_hidden_layers: 2
     color_activation: sigmoid
   # background model configurations
-  num_samples_per_ray_bg: 256
+  num_samples_per_ray_bg: 64
   geometry_bg:
     name: volume-density
     radius: ${model.radius}
@@ -116,7 +115,7 @@ system:
     lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_sparsity: 0.0
-    lambda_distortion: 0.0
+    lambda_distortion: 0.01
     lambda_distortion_bg: 0.0
     lambda_opaque: 0.01
     sparsity_scale: 1.

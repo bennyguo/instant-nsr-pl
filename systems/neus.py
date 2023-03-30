@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.utilities.rank_zero import rank_zero_info, rank_zero_debug
 
 import models
+from models.utils import cleanup
 from models.ray_utils import get_rays
 import systems
 from systems.base import BaseSystem
@@ -46,13 +47,19 @@ class NeuSSystem(BaseSystem):
             y = torch.randint(
                 0, self.dataset.h, size=(self.train_num_rays,), device=self.dataset.all_images.device
             )
-            directions = self.dataset.directions[y, x]
+            if self.dataset.directions.ndim == 3: # (H, W, 3)
+                directions = self.dataset.directions[y, x]
+            elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
+                directions = self.dataset.directions[index, y, x]
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1)
         else:
             c2w = self.dataset.all_c2w[index][0]
-            directions = self.dataset.directions
+            if self.dataset.directions.ndim == 3: # (H, W, 3)
+                directions = self.dataset.directions
+            elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
+                directions = self.dataset.directions[index][0] 
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
@@ -69,7 +76,8 @@ class NeuSSystem(BaseSystem):
         else:
             self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
         
-        rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])
+        if self.dataset.apply_mask:
+            rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])
         
         batch.update({
             'rays': rays,
@@ -102,7 +110,7 @@ class NeuSSystem(BaseSystem):
         opacity = torch.clamp(out['opacity'].squeeze(-1), 1.e-3, 1.-1.e-3)
         loss_mask = binary_cross_entropy(opacity, batch['fg_mask'].float())
         self.log('train/loss_mask', loss_mask)
-        loss += loss_mask * (self.C(self.config.system.loss.lambda_mask) if self.dataset.use_mask else 0.0)
+        loss += loss_mask * (self.C(self.config.system.loss.lambda_mask) if self.dataset.has_mask else 0.0)
 
         loss_opaque = binary_cross_entropy(opacity, opacity)
         self.log('train/loss_opaque', loss_opaque)
@@ -156,7 +164,7 @@ class NeuSSystem(BaseSystem):
     
     def validation_step(self, batch, batch_idx):
         out = self(batch)
-        psnr = self.criterions['psnr'](out['comp_rgb_full'], batch['rgb'])
+        psnr = self.criterions['psnr'](out['comp_rgb_full'].to(batch['rgb']), batch['rgb'])
         W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
@@ -197,7 +205,7 @@ class NeuSSystem(BaseSystem):
 
     def test_step(self, batch, batch_idx):
         out = self(batch)
-        psnr = self.criterions['psnr'](out['comp_rgb_full'], batch['rgb'])
+        psnr = self.criterions['psnr'](out['comp_rgb_full'].to(batch['rgb']), batch['rgb'])
         W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-test/{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},

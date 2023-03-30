@@ -46,13 +46,19 @@ class NeRFSystem(BaseSystem):
             y = torch.randint(
                 0, self.dataset.h, size=(self.train_num_rays,), device=self.dataset.all_images.device
             )
-            directions = self.dataset.directions[y, x]
+            if self.dataset.directions.ndim == 3: # (H, W, 3)
+                directions = self.dataset.directions[y, x]
+            elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
+                directions = self.dataset.directions[index, y, x]
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1)
         else:
             c2w = self.dataset.all_c2w[index][0]
-            directions = self.dataset.directions
+            if self.dataset.directions.ndim == 3: # (H, W, 3)
+                directions = self.dataset.directions
+            elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
+                directions = self.dataset.directions[index][0]
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
             fg_mask = self.dataset.all_fg_masks[index].view(-1)
@@ -69,7 +75,8 @@ class NeRFSystem(BaseSystem):
         else:
             self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
         
-        rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])        
+        if self.dataset.apply_mask:
+            rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])        
         
         batch.update({
             'rays': rays,
@@ -128,7 +135,7 @@ class NeRFSystem(BaseSystem):
     
     def validation_step(self, batch, batch_idx):
         out = self(batch)
-        psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
+        psnr = self.criterions['psnr'](out['comp_rgb'].to(batch['rgb']), batch['rgb'])
         W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
@@ -165,7 +172,7 @@ class NeRFSystem(BaseSystem):
 
     def test_step(self, batch, batch_idx):  
         out = self(batch)
-        psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
+        psnr = self.criterions['psnr'](out['comp_rgb'].to(batch['rgb']), batch['rgb'])
         W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-test/{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},

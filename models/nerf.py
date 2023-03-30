@@ -129,7 +129,7 @@ class NeRFModel(BaseModel):
         if self.training:
             out = self.forward_(rays)
         else:
-            out = chunk_batch(self.forward_, self.config.ray_chunk, rays)
+            out = chunk_batch(self.forward_, self.config.ray_chunk, True, rays)
         return {
             **out,
         }
