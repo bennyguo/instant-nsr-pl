@@ -97,3 +97,14 @@ All experiments are conducted on a single NVIDIA RTX3090.
 ## Related Projects
 - [ngp_pl](https://github.com/kwea123/ngp_pl): Great Instant-NGP implementation in PyTorch-Lightning! Background model and GUI supported.
 - [Instant-NSR](https://github.com/zhaofuq/Instant-NSR): NeuS implementation using multiresolution hash encoding.
+
+## Citation
+If you find this codebase useful, please consider citing:
+```
+@misc{instant-nsr-pl,
+    Author = {Yuan-Chen Guo},
+    Year = {2022},
+    Note = {https://github.com/bennyguo/instant-nsr-pl},
+    Title = {Instant Neural Surface Reconstruction}
+}
+```
