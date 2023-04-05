@@ -249,9 +249,11 @@ class NeuSSystem(BaseSystem):
                 fps=30
             )
             
-            mesh = self.model.isosurface()
-            self.save_mesh(
-                f"it{self.global_step}-{self.config.model.geometry.isosurface.method}{self.config.model.geometry.isosurface.resolution}.obj",
-                mesh['v_pos'],
-                mesh['t_pos_idx'],
-            )
+            self.export()
+    
+    def export(self):
+        mesh = self.model.export(self.config.export)
+        self.save_mesh(
+            f"it{self.global_step}-{self.config.model.geometry.isosurface.method}{self.config.model.geometry.isosurface.resolution}.obj",
+            **mesh
+        )        

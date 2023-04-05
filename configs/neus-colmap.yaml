@@ -151,11 +151,15 @@ system:
           total_iters: ${system.warmup_steps}
       - name: ExponentialLR
         args:
-          gamma: ${calc_exp_lr_decay_rate:0.1,${sub:${trainer.max_steps},${system.warmup_steps}}}   
+          gamma: ${calc_exp_lr_decay_rate:0.1,${sub:${trainer.max_steps},${system.warmup_steps}}}            
 
 checkpoint:
   save_top_k: -1
   every_n_train_steps: ${trainer.max_steps}
+
+export:
+  chunk_size: 2097152
+  export_vertex_color: True   
 
 trainer:
   max_steps: 20000

@@ -112,6 +112,9 @@ class BaseSystem(pl.LightningModule, SaverMixin):
         """
         raise NotImplementedError
 
+    def export(self):
+        raise NotImplementedError
+
     def configure_optimizers(self):
         optim = parse_optimizer(self.config.system.optimizer, self.model)
         ret = {

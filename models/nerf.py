@@ -2,6 +2,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import models
 from models.base import BaseModel
@@ -148,3 +149,13 @@ class NeRFModel(BaseModel):
         losses.update(self.texture.regularizations(out))
         return losses
 
+    @torch.no_grad()
+    def export(self, export_config):
+        mesh = self.isosurface()
+        if export_config.export_vertex_color:
+            _, feature = chunk_batch(self.geometry, export_config.chunk_size, False, mesh['v_pos'].to(self.rank))
+            viewdirs = torch.zeros(feature.shape[0], 3).to(feature)
+            viewdirs[...,2] = -1. # set the viewing directions to be -z (looking down)
+            rgb = self.texture(feature, viewdirs).clamp(0,1)
+            mesh['v_rgb'] = rgb.cpu()
+        return mesh

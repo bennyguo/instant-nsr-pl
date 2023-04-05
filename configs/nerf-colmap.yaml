@@ -82,6 +82,10 @@ checkpoint:
   save_top_k: -1
   every_n_train_steps: ${trainer.max_steps}
 
+export:
+  chunk_size: 2097152
+  export_vertex_color: False  
+
 trainer:
   max_steps: 20000
   log_every_n_steps: 200

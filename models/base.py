@@ -26,3 +26,7 @@ class BaseModel(nn.Module):
     
     def regularizations(self, out):
         return {}
+    
+    @torch.no_grad()
+    def export(self, export_config):
+        return {}
