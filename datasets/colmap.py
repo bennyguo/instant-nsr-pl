@@ -39,6 +39,10 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
         b = -cams_ori + cams_ori.roll(1,0)
         t = torch.linalg.lstsq(A, b).solution
         center = (torch.stack([cams_dir, cams_dir.roll(1,0)], dim=-1) * t[:,None,:] + torch.stack([cams_ori, cams_ori.roll(1,0)], dim=-1)).mean((0,2))
+    elif center_est_method == 'point':
+        # first estimation scene center as the average of all camera positions
+        # later we'll use the center of all points bounded by the cameras as the final scene center
+        center = poses[...,3].mean(0)
     else:
         raise NotImplementedError(f'Unknown center estimation method: {center_est_method}')
 
@@ -64,23 +68,46 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
     x = F.normalize(y_.cross(z), dim=0)
     y = z.cross(x)
 
-    # rotation and translation
-    Rc = torch.stack([x, y, z], dim=1)
-    tc = center.reshape(3, 1)
-    R, t = Rc.T, -Rc.T @ tc
-    poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
-    inv_trans = torch.cat([torch.cat([R, t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
-    poses_norm = (inv_trans @ poses_homo)[:,:3] # (N_images, 4, 4)
+    if center_est_method == 'point':
+        # rotation
+        Rc = torch.stack([x, y, z], dim=1)
+        R = Rc.T
+        poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
+        inv_trans = torch.cat([torch.cat([R, torch.as_tensor([[0.,0.,0.]]).T], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
+        poses_norm = (inv_trans @ poses_homo)[:,:3]
+        pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
 
-    # scaling
-    scale = poses_norm[...,3].norm(p=2, dim=-1).min()
-    poses_norm[...,3] /= scale
+        # translation and scaling
+        poses_min, poses_max = poses_norm[...,3].min(0)[0], poses_norm[...,3].max(0)[0]
+        pts_fg = pts[(poses_min[0] < pts[:,0]) & (pts[:,0] < poses_max[0]) & (poses_min[1] < pts[:,1]) & (pts[:,1] < poses_max[1])]
+        center = get_center(pts_fg)
+        tc = center.reshape(3, 1)
+        t = -tc
+        poses_homo = torch.cat([poses_norm, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses_norm.shape[0], -1, -1)], dim=1)
+        inv_trans = torch.cat([torch.cat([torch.eye(3), t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
+        poses_norm = (inv_trans @ poses_homo)[:,:3]
+        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
+        poses_norm[...,3] /= scale
+        pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
+        pts = pts / scale
+    else:
+        # rotation and translation
+        Rc = torch.stack([x, y, z], dim=1)
+        tc = center.reshape(3, 1)
+        R, t = Rc.T, -Rc.T @ tc
+        poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
+        inv_trans = torch.cat([torch.cat([R, t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
+        poses_norm = (inv_trans @ poses_homo)[:,:3] # (N_images, 4, 4)
 
-    # apply the transformation to the point cloud
-    pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
-    pts = pts / scale
+        # scaling
+        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
+        poses_norm[...,3] /= scale
 
-    return poses, pts
+        # apply the transformation to the point cloud
+        pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
+        pts = pts / scale
+
+    return poses_norm, pts
 
 def create_spheric_poses(cameras, n_steps=120):
     center = torch.as_tensor([0.,0.,0.], dtype=cameras.dtype, device=cameras.device)
@@ -231,7 +258,7 @@ class ColmapDatasetBase():
         open('cameras.txt', 'w').write('\n'.join(pts_out))
         open('scene.txt', 'w').write('\n'.join([' '.join([str(p) for p in l]) + ' 0.0 0.0 0.0' for l in self.pts3d.view(-1, 3).tolist()]))
 
-        # exit(1)
+        exit(1)
         """
 
         self.all_c2w, self.all_images, self.all_fg_masks = \
