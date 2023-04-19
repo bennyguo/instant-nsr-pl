@@ -9,6 +9,7 @@ dataset:
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
   n_test_traj_steps: 120
+  apply_mask: false
 
 model:
   name: neus

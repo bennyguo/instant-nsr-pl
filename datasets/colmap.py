@@ -174,7 +174,7 @@ class ColmapDatasetBase():
 
             mask_dir = os.path.join(self.config.root_dir, 'masks')
             has_mask = os.path.exists(mask_dir) # TODO: support partial masks
-            apply_mask = True
+            apply_mask = has_mask and self.config.apply_mask
             
             all_c2w, all_images, all_fg_masks = [], [], []
 

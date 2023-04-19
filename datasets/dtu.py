@@ -80,7 +80,7 @@ class DTUDatasetBase():
 
         mask_dir = os.path.join(self.config.root_dir, 'mask')
         self.has_mask = True
-        self.apply_mask = True
+        self.apply_mask = self.config.apply_mask
         
         self.directions = []
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
