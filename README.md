@@ -53,9 +53,9 @@ python launch.py --config configs/nerf-blender.yaml --gpu 0 --train dataset.scen
 Download preprocessed DTU data provided by [NeuS](https://drive.google.com/drive/folders/1Nlzejs4mfPuJYORLbDEUDWlc9IZIbU0C?usp=sharing) or [IDR](https://www.dropbox.com/sh/5tam07ai8ch90pf/AADniBT3dmAexvm_J1oL__uoa). In the provided config files we assume using NeuS DTU data. If you are using IDR DTU data, please set `dataset.cameras_file=cameras.npz`. You may also need to adjust `dataset.root_dir` to point to your downloaded data location.
 ```bash
 # train NeuS on DTU without mask
-python launch.py --config configs/configs/neus-dtu.yaml --gpu 0 --train
+python launch.py --config configs/neus-dtu.yaml --gpu 0 --train
 # train NeuS on DTU with mask
-python launch.py --config configs/configs/neus-dtu.yaml --gpu 0 --train system.loss.lambda_mask=0.1
+python launch.py --config configs/neus-dtu.yaml --gpu 0 --train system.loss.lambda_mask=0.1
 ```
 Notes:
 - PSNR in the testing stage is meaningless, as we simply compare to pure white images in testing.
