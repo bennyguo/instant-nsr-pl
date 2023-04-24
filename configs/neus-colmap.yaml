@@ -10,6 +10,7 @@ dataset:
   center_est_method: lookat
   n_test_traj_steps: 120
   apply_mask: false
+  load_data_on_gpu: false
 
 model:
   name: neus
