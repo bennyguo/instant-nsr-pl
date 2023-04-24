@@ -232,7 +232,7 @@ class ColmapDatasetBase():
             self.all_images = torch.zeros((self.config.n_test_traj_steps, self.h, self.w, 3), dtype=torch.float32)
             self.all_fg_masks = torch.zeros((self.config.n_test_traj_steps, self.h, self.w), dtype=torch.float32)
         else:
-            self.all_images, self.all_fg_masks = torch.stack(self.all_images, dim=0), torch.stack(self.all_fg_masks, dim=0)  
+            self.all_images, self.all_fg_masks = torch.stack(self.all_images, dim=0).float(), torch.stack(self.all_fg_masks, dim=0).float()
 
         """
         # for debug use
@@ -262,10 +262,10 @@ class ColmapDatasetBase():
         exit(1)
         """
 
-        self.all_c2w, self.all_images, self.all_fg_masks = \
-            self.all_c2w.float().to(self.rank), \
-            self.all_images.float().to(self.rank), \
-            self.all_fg_masks.float().to(self.rank)
+        self.all_c2w = self.all_c2w.float().to(self.rank)
+        if self.config.load_data_on_gpu:
+            self.all_images = self.all_images.to(self.rank) 
+            self.all_fg_masks = self.all_fg_masks.to(self.rank)
         
 
 class ColmapDataset(Dataset, ColmapDatasetBase):
