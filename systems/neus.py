@@ -42,10 +42,10 @@ class NeuSSystem(BaseSystem):
         if stage in ['train']:
             c2w = self.dataset.all_c2w[index]
             x = torch.randint(
-                0, self.dataset.w, size=(self.train_num_rays,), device=self.dataset.all_fg_masks.device
+                0, self.dataset.w, size=(self.train_num_rays,), device=self.dataset.all_images.device
             )
             y = torch.randint(
-                0, self.dataset.h, size=(self.train_num_rays,), device=self.dataset.all_fg_masks.device
+                0, self.dataset.h, size=(self.train_num_rays,), device=self.dataset.all_images.device
             )
             if self.dataset.directions.ndim == 3: # (H, W, 3)
                 directions = self.dataset.directions[y, x]
