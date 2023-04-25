@@ -12,7 +12,6 @@ from models.ray_utils import get_rays
 import systems
 from systems.base import BaseSystem
 from systems.criterions import PSNR, binary_cross_entropy
-from utils.misc import get_rank
 
 
 @systems.register('neus-system')
@@ -33,7 +32,6 @@ class NeuSSystem(BaseSystem):
         return self.model(batch['rays'])
     
     def preprocess_data(self, batch, stage):
-        self.rank = get_rank()
         if 'index' in batch: # validation / testing
             index = batch['index']
         else:

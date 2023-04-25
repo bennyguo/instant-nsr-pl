@@ -189,7 +189,7 @@ class ColmapDatasetBase():
                     img = Image.open(img_path)
                     img = img.resize(img_wh, Image.BICUBIC)
                     img = TF.to_tensor(img).permute(1, 2, 0)[...,:3]
-                    img = img.cuda() if self.config.load_data_on_gpu else img.cpu()
+                    img = img.to(self.rank) if self.config.load_data_on_gpu else img.cpu()
                     if has_mask:
                         mask_paths = [os.path.join(mask_dir, d.name), os.path.join(mask_dir, d.name[3:])]
                         mask_paths = list(filter(os.path.exists, mask_paths))
