@@ -74,7 +74,7 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
     elif up_est_method == 'camera':
         # estimate up direction as the average of all camera up directions
         z = F.normalize((poses[...,3] - center).mean(0), dim=0)
-    elif up_est_method == 'object':
+    elif up_est_method == 'z-axis':
         # center pose
         poses[:, :3, 1:3] *= -1. # OpenGL => COLMAP
 
@@ -84,7 +84,6 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
 
         poses = poses.cpu().numpy()
         # camera center
-        # center = poses[:, :3, 3].mean(0)
 
         # prepare to rotate all camera up directions to [0,0,1]
         # normalization
