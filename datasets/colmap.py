@@ -112,7 +112,13 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
         poses_homo = torch.cat([poses_norm, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses_norm.shape[0], -1, -1)], dim=1)
         inv_trans = torch.cat([torch.cat([torch.eye(3), t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
         poses_norm = (inv_trans @ poses_homo)[:,:3]
-        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
+
+        # rescaling
+        if self.cam_downscale:
+            scale = self.cam_downscale
+        else:
+            # auto-scale with camera positions
+            scale = poses_norm[...,3].norm(p=2, dim=-1).min()
         poses_norm[...,3] /= scale
         pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
         pts = pts / scale
@@ -128,15 +134,19 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
         # apply the transformation to the point cloud
         pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
 
-        # rectify convention...
+        # rectify convention
         poses_norm = poses_norm[:, [1,0,2,3],:]
         poses_norm[:,2] *= -1
         pts = pts[:,[1,0,2]]
         pts[:,2] *= -1
         poses_norm = poses_norm[:,:3]
 
-        # scaling
-        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
+        # rescaling
+        if self.cam_downscale:
+            scale = self.cam_downscale
+        else:
+            # auto-scale with camera positions
+            scale = poses_norm[...,3].norm(p=2, dim=-1).min()
         poses_norm[...,3] /= scale
         pts = pts / scale
 
