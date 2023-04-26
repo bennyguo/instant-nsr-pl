@@ -17,6 +17,7 @@ from models.ray_utils import get_ray_directions
 from utils.misc import get_rank
 
 
+# get center
 def get_center(pts):
     center = pts.mean(0)
     dis = (pts - center[None,:]).norm(p=2, dim=-1)
@@ -26,7 +27,7 @@ def get_center(pts):
     center = pts[valid].mean(0)
     return center
 
-# rotation
+# get rotation
 def get_rot(a, b):
         a, b = a / np.linalg.norm(a), b / np.linalg.norm(b)
         v = np.cross(a, b)
@@ -40,7 +41,7 @@ def get_rot(a, b):
         kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
         return np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2 + 1e-10))
 
-def normalize_poses(poses, pts, up_est_method, center_est_method):
+def normalize_poses(poses, pts, up_est_method, center_est_method, cam_downscale=None):
     if center_est_method == 'camera':
         # estimation scene center as the average of all camera positions
         center = poses[...,3].mean(0)
@@ -77,58 +78,28 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
     elif up_est_method == 'z-axis':
         # center pose
         poses[:,:3,1:3] *= -1. # OpenGL => COLMAP
-
         # full 4x4 poses
         onehot = torch.tile(torch.tensor([0.,0.,0.,1.0]), (poses.size()[0],1,1))
-        poses = torch.cat((poses, onehot), axis=1)
-
-        poses = poses.cpu().numpy()
-
+        poses = torch.cat((poses, onehot), axis=1).cpu().numpy()
         # normalization
         z = poses[:,:3,1].mean(0) / (np.linalg.norm(poses[:,:3,1].mean(0)) + 1e-10)
         # rotate averaged camera up direction to [0,0,1]
         R_z = get_rot(z, [0,0,1])
-        R_z = np.pad(R_z, [0,1])
+        R_z = torch.tensor(np.pad(R_z, [0,1])).float()
         R_z[-1,-1] = 1
-        
-        # center cameras
-        poses = torch.as_tensor(poses).float()
-        poses[:,:3,3] -= center
-        # upwarding cameras
-        poses_norm = torch.as_tensor(R_z).float() @ poses # (N_images, 4, 4)
-        # center points
-        pts = (pts - center) @ R_z[:3,:3].T
-
-        # rectify convention...
-        poses_norm[:,:3,1:3] *= -1 # COLMAP => OpenGL
-        poses_norm = poses_norm[:, [1,0,2,3],:]
-        poses_norm[:,2] *= -1
-
-        pts = pts[:,[1,0,2]]
-        pts[:,2] *= -1
-
-        # auto-scale
-        # scale = 1 / 0.4
-        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
-        if scale == -1:
-            scale = 1 / np.linalg.norm(poses_norm[:,:3,3], axis=-1).min()
-
-        poses_norm[:,:3,3] /= scale
-        pts /= scale
-
-        poses_norm = poses_norm[:,:3,:]
-        return poses_norm, pts
+        poses = torch.as_tensor(poses[:,:3]).float()
     else:
         raise NotImplementedError(f'Unknown up estimation method: {up_est_method}')
 
-    # new axis
-    y_ = torch.as_tensor([z[1],-z[0],0.])
-    x = F.normalize(y_.cross(z), dim=0)
-    y = z.cross(x)
+    if not up_est_method == 'z-axis':
+        # new axis
+        y_ = torch.as_tensor([z[1],-z[0],0.])
+        x = F.normalize(y_.cross(z), dim=0)
+        y = z.cross(x)
 
     if center_est_method == 'point':
         # rotation
-        Rc = torch.stack([x, y, z], dim=1)
+        Rc = R_z[:3,:3].T if up_est_method == 'z-axis' else torch.stack([x, y, z], dim=1)
         R = Rc.T
         poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
         inv_trans = torch.cat([torch.cat([R, torch.as_tensor([[0.,0.,0.]]).T], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
@@ -144,25 +115,50 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
         poses_homo = torch.cat([poses_norm, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses_norm.shape[0], -1, -1)], dim=1)
         inv_trans = torch.cat([torch.cat([torch.eye(3), t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
         poses_norm = (inv_trans @ poses_homo)[:,:3]
-        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
-        poses_norm[...,3] /= scale
+
         pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
+        if up_est_method == 'z-axis':
+            # rectify convention
+            poses_norm[:,:3,1:3] *= -1 # COLMAP => OpenGL
+            poses_norm = poses_norm[:, [1,0,2],:]
+            poses_norm[:,2] *= -1
+            pts = pts[:,[1,0,2]]
+            pts[:,2] *= -1
+
+        # rescaling
+        if cam_downscale:
+            scale = cam_downscale
+        else:
+            # auto-scale with camera positions
+            scale = poses_norm[...,3].norm(p=2, dim=-1).min()
+        poses_norm[...,3] /= scale
         pts = pts / scale
     else:
         # rotation and translation
-        Rc = torch.stack([x, y, z], dim=1)
+        Rc = R_z[:3,:3].T if up_est_method == 'z-axis' else torch.stack([x, y, z], dim=1)
         tc = center.reshape(3, 1)
         R, t = Rc.T, -Rc.T @ tc
         poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
         inv_trans = torch.cat([torch.cat([R, t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
-        poses_norm = (inv_trans @ poses_homo)[:,:3] # (N_images, 4, 4)
-
-        # scaling
-        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
-        poses_norm[...,3] /= scale
+        poses_norm = (inv_trans @ poses_homo)[:,:3] # (N_images, 3, 4)
 
         # apply the transformation to the point cloud
         pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
+        if up_est_method == 'z-axis':
+            # rectify convention
+            poses_norm[:,:3,1:3] *= -1 # COLMAP => OpenGL
+            poses_norm = poses_norm[:, [1,0,2],:]
+            poses_norm[:,2] *= -1
+            pts = pts[:,[1,0,2]]
+            pts[:,2] *= -1
+
+        # rescaling
+        if cam_downscale:
+            scale = cam_downscale
+        else:
+            # auto-scale with camera positions
+            scale = poses_norm[...,3].norm(p=2, dim=-1).min()
+        poses_norm[...,3] /= scale
         pts = pts / scale
 
     return poses_norm, pts
@@ -264,7 +260,7 @@ class ColmapDatasetBase():
 
             pts3d = read_points3d_binary(os.path.join(self.config.root_dir, 'sparse/0/points3D.bin'))
             pts3d = torch.from_numpy(np.array([pts3d[k].xyz for k in pts3d])).float()
-            all_c2w, pts3d = normalize_poses(all_c2w, pts3d, up_est_method=self.config.up_est_method, center_est_method=self.config.center_est_method)
+            all_c2w, pts3d = normalize_poses(all_c2w, pts3d, up_est_method=self.config.up_est_method, center_est_method=self.config.center_est_method, cam_downscale=self.config.cam_downscale)
 
             ColmapDatasetBase.properties = {
                 'w': w,
