@@ -76,45 +76,44 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
         z = F.normalize((poses[...,3] - center).mean(0), dim=0)
     elif up_est_method == 'z-axis':
         # center pose
-        poses[:, :3, 1:3] *= -1. # OpenGL => COLMAP
+        poses[:,:3,1:3] *= -1. # OpenGL => COLMAP
 
         # full 4x4 poses
-        onehot = torch.tile(torch.tensor([0, 0, 0, 1.0]), (poses.size()[0], 1, 1))
+        onehot = torch.tile(torch.tensor([0.,0.,0.,1.0]), (poses.size()[0],1,1))
         poses = torch.cat((poses, onehot), axis=1)
 
         poses = poses.cpu().numpy()
-        # camera center
 
-        # prepare to rotate all camera up directions to [0,0,1]
         # normalization
-        z = poses[:, :3, 1].mean(0) / (np.linalg.norm(poses[:, :3, 1].mean(0)) + 1e-10)
-        R_z = get_rot(z, [0, 0, 1])
-        R_z = np.pad(R_z, [0, 1])
-        R_z[-1, -1] = 1
+        z = poses[:,:3,1].mean(0) / (np.linalg.norm(poses[:,:3,1].mean(0)) + 1e-10)
+        # rotate averaged camera up direction to [0,0,1]
+        R_z = get_rot(z, [0,0,1])
+        R_z = np.pad(R_z, [0,1])
+        R_z[-1,-1] = 1
         
         # center cameras
         poses = torch.as_tensor(poses).float()
-        poses[:, :3, 3] -= center
+        poses[:,:3,3] -= center
         # upwarding cameras
         poses_norm = torch.as_tensor(R_z).float() @ poses # (N_images, 4, 4)
         # center points
-        pts = (pts - center) @ R_z[:3, :3].T
+        pts = (pts - center) @ R_z[:3,:3].T
 
         # rectify convention...
-        poses_norm[:, :3, 1:3] *= -1 # COLMAP => OpenGL
-        poses_norm = poses_norm[:, [1, 0, 2, 3], :]
-        poses_norm[:, 2] *= -1
+        poses_norm[:,:3,1:3] *= -1 # COLMAP => OpenGL
+        poses_norm = poses_norm[:, [1,0,2,3],:]
+        poses_norm[:,2] *= -1
 
-        pts = pts[:, [1, 0, 2]]
-        pts[:, 2] *= -1
+        pts = pts[:,[1,0,2]]
+        pts[:,2] *= -1
 
         # auto-scale
         # scale = 1 / 0.4
         scale = poses_norm[...,3].norm(p=2, dim=-1).min()
         if scale == -1:
-            scale = 1 / np.linalg.norm(poses_norm[:, :3, 3], axis=-1).min()
+            scale = 1 / np.linalg.norm(poses_norm[:,:3,3], axis=-1).min()
 
-        poses_norm[:, :3, 3] /= scale
+        poses_norm[:,:3,3] /= scale
         pts /= scale
 
         poses_norm = poses_norm[:,:3,:]
@@ -123,7 +122,7 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
         raise NotImplementedError(f'Unknown up estimation method: {up_est_method}')
 
     # new axis
-    y_ = torch.as_tensor([z[1], -z[0], 0.])
+    y_ = torch.as_tensor([z[1],-z[0],0.])
     x = F.normalize(y_.cross(z), dim=0)
     y = z.cross(x)
 
@@ -248,7 +247,7 @@ class ColmapDatasetBase():
                     img = Image.open(img_path)
                     img = img.resize(img_wh, Image.BICUBIC)
                     img = TF.to_tensor(img).permute(1, 2, 0)[...,:3]
-                    img = img.cuda() if self.config.load_data_on_gpu else img.cpu()
+                    img = img.to(self.rank) if self.config.load_data_on_gpu else img.cpu()
                     if has_mask:
                         mask_paths = [os.path.join(mask_dir, d.name), os.path.join(mask_dir, d.name[3:])]
                         mask_paths = list(filter(os.path.exists, mask_paths))
