@@ -77,47 +77,15 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
     elif up_est_method == 'z-axis':
         # center pose
         poses[:,:3,1:3] *= -1. # OpenGL => COLMAP
-
         # full 4x4 poses
         onehot = torch.tile(torch.tensor([0.,0.,0.,1.0]), (poses.size()[0],1,1))
-        poses = torch.cat((poses, onehot), axis=1)
-
-        poses = poses.cpu().numpy()
-
+        poses = torch.cat((poses, onehot), axis=1).cpu().numpy()
         # normalization
         z = poses[:,:3,1].mean(0) / (np.linalg.norm(poses[:,:3,1].mean(0)) + 1e-10)
         # rotate averaged camera up direction to [0,0,1]
         R_z = get_rot(z, [0,0,1])
         R_z = np.pad(R_z, [0,1])
         R_z[-1,-1] = 1
-        
-        # center cameras
-        poses = torch.as_tensor(poses).float()
-        poses[:,:3,3] -= center
-        # upwarding cameras
-        poses_norm = torch.as_tensor(R_z).float() @ poses # (N_images, 4, 4)
-        # center points
-        pts = (pts - center) @ R_z[:3,:3].T
-
-        # rectify convention...
-        poses_norm[:,:3,1:3] *= -1 # COLMAP => OpenGL
-        poses_norm = poses_norm[:, [1,0,2,3],:]
-        poses_norm[:,2] *= -1
-
-        pts = pts[:,[1,0,2]]
-        pts[:,2] *= -1
-
-        # auto-scale
-        # scale = 1 / 0.4
-        scale = poses_norm[...,3].norm(p=2, dim=-1).min()
-        if scale == -1:
-            scale = 1 / np.linalg.norm(poses_norm[:,:3,3], axis=-1).min()
-
-        poses_norm[:,:3,3] /= scale
-        pts /= scale
-
-        poses_norm = poses_norm[:,:3,:]
-        return poses_norm, pts
     else:
         raise NotImplementedError(f'Unknown up estimation method: {up_est_method}')
 
@@ -150,19 +118,26 @@ def normalize_poses(poses, pts, up_est_method, center_est_method):
         pts = pts / scale
     else:
         # rotation and translation
-        Rc = torch.stack([x, y, z], dim=1)
+        Rc = R_z if up_est_method == 'z-axis' else torch.stack([x, y, z], dim=1)
         tc = center.reshape(3, 1)
         R, t = Rc.T, -Rc.T @ tc
         poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
         inv_trans = torch.cat([torch.cat([R, t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
-        poses_norm = (inv_trans @ poses_homo)[:,:3] # (N_images, 4, 4)
+        poses_norm = (inv_trans @ poses_homo) # (N_images, 4, 4)
+
+        # apply the transformation to the point cloud
+        pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
+
+        # rectify convention...
+        poses_norm = poses_norm[:, [1,0,2,3],:]
+        poses_norm[:,2] *= -1
+        pts = pts[:,[1,0,2]]
+        pts[:,2] *= -1
+        poses_norm = poses_norm[:,:3]
 
         # scaling
         scale = poses_norm[...,3].norm(p=2, dim=-1).min()
         poses_norm[...,3] /= scale
-
-        # apply the transformation to the point cloud
-        pts = (inv_trans @ torch.cat([pts, torch.ones_like(pts[:,0:1])], dim=-1)[...,None])[:,:3,0]
         pts = pts / scale
 
     return poses_norm, pts
