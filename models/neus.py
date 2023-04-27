@@ -154,7 +154,7 @@ class NeuSModel(BaseModel):
         # if the ray intersects with the bounding box, start from the farther intersection point
         # otherwise start from self.far_plane_bg
         # note that in nerfacc t_max is set to 1e10 if there is no intersection
-        near_plane = torch.where(t_max.double() > 1e9, self.near_plane_bg, t_max.double())
+        near_plane = torch.where(t_max > 1e9, self.near_plane_bg, t_max)
         with torch.no_grad():
             ray_indices, t_starts, t_ends = ray_marching(
                 rays_o, rays_d,
