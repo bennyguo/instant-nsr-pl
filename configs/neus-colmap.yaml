@@ -6,7 +6,7 @@ dataset:
   name: colmap
   root_dir: ./load/unbounded360/garden
   img_downscale: 4 # specify training image size by either img_wh or img_downscale
-  cam_downscale: 2.5 # close-up cameras to resize the 3D representation
+  cam_downscale: 2.5 # if false, to rescale the cameras/pts positions automatically
   up_est_method: ground # if true, use estimated ground plane normal direction as up direction
   center_est_method: lookat
   n_test_traj_steps: 120
