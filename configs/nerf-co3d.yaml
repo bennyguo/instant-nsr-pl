@@ -4,7 +4,7 @@ seed: 42
 
 dataset:
   name: co3d
-  root_dir: /mnt/nas/raid/10102/co3d_single/apple/189_20393_38136
+  root_dir: ./co3d_single/apple/189_20393_38136
   img_wh:
     - 1282
     - 719
