@@ -137,7 +137,7 @@ def normalize_poses(poses, pts, up_est_method, center_est_method, cam_downscale=
         # rotation and translation
         Rc = R_z[:3,:3].T if up_est_method == 'z-axis' else torch.stack([x, y, z], dim=1)
         tc = center.reshape(3, 1)
-        R, t = torch.tensor(Rc.T).float(), torch.tensor(-Rc.T).float() @ tc
+        R, t = Rc.T, -Rc.T @ tc
         poses_homo = torch.cat([poses, torch.as_tensor([[[0.,0.,0.,1.]]]).expand(poses.shape[0], -1, -1)], dim=1)
         inv_trans = torch.cat([torch.cat([R, t], dim=1), torch.as_tensor([[0.,0.,0.,1.]])], dim=0)
         poses_norm = (inv_trans @ poses_homo)[:,:3] # (N_images, 3, 4)
