@@ -4,17 +4,17 @@ seed: 42
 
 dataset:
   name: colmap
-  root_dir: ./load/DTU/scan65
-  img_wh:
-    - 800
-    - 600
-  use_mask: true # if true, crop out the foreground region; only effective when root_dir/masks folder exists
-  use_pixel_centers: true
+  root_dir: ./load/unbounded360/garden
+  img_downscale: 4 # specify training image size by either img_wh or img_downscale
+  up_est_method: ground # if true, use estimated ground plane normal direction as up direction
+  center_est_method: lookat
   n_test_traj_steps: 120
+  apply_mask: false
+  load_data_on_gpu: false
 
 model:
   name: neus
-  radius: 0.5
+  radius: 0.6
   num_samples_per_ray: 1024
   train_num_rays: 256
   max_train_num_rays: 8192
@@ -23,9 +23,10 @@ model:
   dynamic_ray_sampling: true
   batch_image_sampling: true
   randomized: true
-  ray_chunk: 4096
-  cos_anneal_end: 5000
-  background: random
+  ray_chunk: 2048
+  cos_anneal_end: 20000
+  learned_background: true
+  background_color: random
   variance:
     init_val: 0.3
     modulate: false  
@@ -69,15 +70,57 @@ model:
       n_neurons: 64
       n_hidden_layers: 2
     color_activation: sigmoid
+  # background model configurations
+  num_samples_per_ray_bg: 256
+  geometry_bg:
+    name: volume-density
+    radius: ${model.radius}
+    feature_dim: 8
+    density_activation: trunc_exp
+    density_bias: -1
+    isosurface: null
+    xyz_encoding_config:
+      otype: ProgressiveBandHashGrid # coarse-to-fine
+      n_levels: 16
+      n_features_per_level: 2
+      log2_hashmap_size: 19
+      base_resolution: 16
+      per_level_scale: 1.447269237440378  
+      # start from start_step and start_level, increase feature level by 1 very update_steps steps
+      start_level: 1
+      update_steps: 500
+      start_step: 0
+    mlp_network_config:
+      otype: FullyFusedMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 64
+      n_hidden_layers: 1
+  texture_bg:
+    name: volume-radiance
+    input_feature_dim: ${model.geometry_bg.feature_dim}
+    dir_encoding_config:
+      otype: SphericalHarmonics
+      degree: 4    
+    mlp_network_config:
+      otype: FullyFusedMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 64
+      n_hidden_layers: 2  
+    color_activation: sigmoid
   
 system:
   name: neus-system
   loss:
     lambda_rgb_mse: 10.
-    lambda_rgb_l1: 1.
-    lambda_mask: 0.1
+    lambda_rgb_l1: 0.
+    lambda_mask: 0.0
     lambda_eikonal: 0.1
-    lambda_sparsity: 0.01
+    lambda_sparsity: 0.0
+    lambda_distortion: 0.0
+    lambda_distortion_bg: 0.0
+    lambda_opaque: 0.01
     sparsity_scale: 1.
   optimizer:
     name: Adam
@@ -87,11 +130,15 @@ system:
       eps: 1.e-15
     params:
       geometry:
-          lr: 0.01
+        lr: 0.01
       texture:
-          lr: 0.01
+        lr: 0.01
+      geometry_bg:
+        lr: 0.01
+      texture_bg:
+        lr: 0.01
       variance:
-          lr: 0.001
+        lr: 0.001
   warmup_steps: 500
   scheduler:
     name: SequentialLR
@@ -106,17 +153,21 @@ system:
           total_iters: ${system.warmup_steps}
       - name: ExponentialLR
         args:
-          gamma: ${calc_exp_lr_decay_rate:0.1,${sub:${trainer.max_steps},${system.warmup_steps}}}   
+          gamma: ${calc_exp_lr_decay_rate:0.1,${sub:${trainer.max_steps},${system.warmup_steps}}}            
 
 checkpoint:
   save_top_k: -1
   every_n_train_steps: ${trainer.max_steps}
 
+export:
+  chunk_size: 2097152
+  export_vertex_color: True   
+
 trainer:
   max_steps: 20000
   log_every_n_steps: 100
   num_sanity_val_steps: 0
-  val_check_interval: 10000
+  val_check_interval: 5000
   limit_train_batches: 1.0
   limit_val_batches: 2
   enable_progress_bar: true 

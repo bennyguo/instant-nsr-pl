@@ -10,7 +10,7 @@ from torch.cuda.amp import custom_bwd, custom_fwd
 import tinycudann as tcnn
 
 
-def chunk_batch(func, chunk_size, *args, **kwargs):
+def chunk_batch(func, chunk_size, move_to_cpu, *args, **kwargs):
     B = None
     for arg in args:
         if isinstance(arg, torch.Tensor):
@@ -34,7 +34,9 @@ def chunk_batch(func, chunk_size, *args, **kwargs):
             print(f'Return value of func must be in type [torch.Tensor, list, tuple, dict], get {type(out_chunk)}.')
             exit(1)
         for k, v in out_chunk.items():
-            out[k].append(v if torch.is_grad_enabled() else v.detach())
+            v = v if torch.is_grad_enabled() else v.detach()
+            v = v.cpu() if move_to_cpu else v
+            out[k].append(v)
     
     if out_type is None:
         return
@@ -67,9 +69,11 @@ trunc_exp = _TruncExp.apply
 
 
 def get_activation(name):
+    if name is None:
+        return lambda x: x
     name = name.lower()
-    if name is None or name == 'none':
-        return nn.Identity()
+    if name == 'none':
+        return lambda x: x
     elif name.startswith('scale'):
         scale_factor = float(name[5:])
         return lambda x: x.clamp(0., scale_factor) / scale_factor
@@ -85,9 +89,9 @@ def get_activation(name):
         return trunc_exp
     elif name.startswith('+') or name.startswith('-'):
         return lambda x: x + float(name)
-    elif name.lower() == 'sigmoid':
+    elif name == 'sigmoid':
         return lambda x: torch.sigmoid(x)
-    elif name.lower() == 'tanh':
+    elif name == 'tanh':
         return lambda x: torch.tanh(x)
     else:
         return getattr(F, name)

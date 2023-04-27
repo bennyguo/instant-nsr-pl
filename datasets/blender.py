@@ -9,19 +9,20 @@ from torch.utils.data import Dataset, DataLoader, IterableDataset
 import torchvision.transforms.functional as TF
 
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import _get_rank
 
 import datasets
 from models.ray_utils import get_ray_directions
+from utils.misc import get_rank
 
 
 class BlenderDatasetBase():
     def setup(self, config, split):
         self.config = config
         self.split = split
-        self.rank = _get_rank()
+        self.rank = get_rank()
 
-        self.use_mask = True
+        self.has_mask = True
+        self.apply_mask = True
 
         with open(os.path.join(self.config.root_dir, f"transforms_{self.split}.json"), 'r') as f:
             meta = json.load(f)
@@ -31,10 +32,16 @@ class BlenderDatasetBase():
         else:
             W, H = 800, 800
 
-        w, h = self.config.img_wh
-        assert round(W / w * h) == H
+        if 'img_wh' in self.config:
+            w, h = self.config.img_wh
+            assert round(W / w * h) == H
+        elif 'img_downscale' in self.config:
+            w, h = W // self.config.img_downscale, H // self.config.img_downscale
+        else:
+            raise KeyError("Either img_wh or img_downscale should be specified.")
         
         self.w, self.h = w, h
+        self.img_wh = (self.w, self.h)
 
         self.near, self.far = self.config.near_plane, self.config.far_plane
 
@@ -42,7 +49,7 @@ class BlenderDatasetBase():
 
         # ray directions for all pixels, same for all images (same H, W, focal)
         self.directions = \
-            get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2, self.config.use_pixel_centers).to(self.rank) # (h, w, 3)           
+            get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2).to(self.rank) # (h, w, 3)           
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 
@@ -52,7 +59,7 @@ class BlenderDatasetBase():
 
             img_path = os.path.join(self.config.root_dir, f"{frame['file_path']}.png")
             img = Image.open(img_path)
-            img = img.resize(self.config.img_wh, Image.BICUBIC)
+            img = img.resize(self.img_wh, Image.BICUBIC)
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
 
             self.all_fg_masks.append(img[..., -1]) # (h, w)

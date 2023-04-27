@@ -1,5 +1,6 @@
 import os
 from omegaconf import OmegaConf
+from packaging import version
 
 
 # ============ Register OmegaConf Recolvers ============= #
@@ -37,3 +38,17 @@ def config_to_primitive(config, resolve=True):
 def dump_config(path, config):
     with open(path, 'w') as fp:
         OmegaConf.save(config=config, f=fp)
+
+def get_rank():
+    # SLURM_PROCID can be set even if SLURM is not managing the multiprocessing,
+    # therefore LOCAL_RANK needs to be checked first
+    rank_keys = ("RANK", "LOCAL_RANK", "SLURM_PROCID", "JSM_NAMESPACE_RANK")
+    for key in rank_keys:
+        rank = os.environ.get(key)
+        if rank is not None:
+            return int(rank)
+    return 0
+
+
+def parse_version(ver):
+    return version.parse(ver)

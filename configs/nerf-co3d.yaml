@@ -16,7 +16,7 @@ dataset:
   cam_scale_factor: 0.95 # inherited from plenoxels
   max_num_frames: 300 # use less frames for debugging
   v2_mode: true
-  use_mask: true
+  apply_mask: true
   box_crop: true
   box_crop_mask_thr: 0.4
   box_crop_context: 0.0 # The amount of additional padding added to each dimention of the cropping bounding box, relative to vox size.
@@ -36,7 +36,8 @@ model:
   batch_image_sampling: true
   randomized: true
   ray_chunk: 32768
-  background: random
+  learned_background: true
+  background_color: random
   geometry:
     name: volume-density
     radius: ${model.radius}
@@ -79,6 +80,7 @@ system:
   loss:
     lambda_rgb: 1.
     lambda_opaque: 0.
+    lambda_distortion: 0.
   optimizer:
     name: Adam
     args:
@@ -96,6 +98,10 @@ checkpoint:
   save_top_k: -1
   every_n_train_steps: ${trainer.max_steps}
 
+export:
+  chunk_size: 2097152
+  export_vertex_color: False  
+  
 trainer:
   max_steps: 20000
   log_every_n_steps: 200

@@ -22,6 +22,7 @@ def main():
     group.add_argument('--validate', action='store_true')
     group.add_argument('--test', action='store_true')
     group.add_argument('--predict', action='store_true')
+    # group.add_argument('--export', action='store_true') # TODO: a separate export action
 
     parser.add_argument('--exp_dir', default='./exp')
     parser.add_argument('--runs_dir', default='./runs')
@@ -107,6 +108,7 @@ def main():
 
     if args.train:
         if args.resume and not args.resume_weights_only:
+            # FIXME: different behavior in pytorch-lighting>1.9 ?
             trainer.fit(system, datamodule=dm, ckpt_path=args.resume)
         else:
             trainer.fit(system, datamodule=dm)

@@ -1,10 +1,9 @@
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.rank_zero import _get_rank
 
 import models
 from systems.utils import parse_optimizer, parse_scheduler, update_module_step
 from utils.mixins import SaverMixin
-from utils.misc import config_to_primitive
+from utils.misc import config_to_primitive, get_rank
 
 
 class BaseSystem(pl.LightningModule, SaverMixin):
@@ -16,7 +15,7 @@ class BaseSystem(pl.LightningModule, SaverMixin):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.rank = _get_rank()
+        self.rank = get_rank()
         self.prepare()
         self.model = models.make(self.config.model.name, self.config.model)
     
@@ -111,6 +110,9 @@ class BaseSystem(pl.LightningModule, SaverMixin):
         Gather metrics from all devices, compute mean.
         Purge repeated results using data index.
         """
+        raise NotImplementedError
+
+    def export(self):
         raise NotImplementedError
 
     def configure_optimizers(self):

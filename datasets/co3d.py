@@ -84,7 +84,8 @@ class Co3dDatasetBase():
         self.split = split
         self.rank = _get_rank()
 
-        self.use_mask = self.config.use_mask
+        self.has_mask = True
+        self.apply_mask = self.config.apply_mask
         cam_scale_factor = self.config.cam_scale_factor
 
         cam_trans = np.diag(np.array([-1, -1, 1, 1], dtype=np.float32))
@@ -164,7 +165,7 @@ class Co3dDatasetBase():
             images.append(img)
             self.directions.append(get_ray_directions(W, H, focal[0], focal[1], prp[0], prp[1]))
 
-            if self.use_mask:
+            if self.apply_mask:
                 mask = np.array(Image.open(os.path.join(self.config.root_dir, "..", "..", frame["mask"]["path"])))
                 mask = mask.astype(np.float32) / 255.0 # (h, w)
             else:
@@ -251,6 +252,7 @@ class Co3dDatasetBase():
         
         self.all_c2w = torch.from_numpy((extrinsics @ np.diag(np.array([1, -1, -1, 1], dtype=np.float32))[None, ...])[..., :3, :4])
         self.all_images = torch.from_numpy(np.stack(images, axis=0))
+        self.img_wh = (self.w, self.h)
         
         # self.all_c2w = []
         # self.all_images = []
@@ -275,24 +277,14 @@ class Co3dDatasetBase():
             'test': i_all
         }
 
-        # if self.split == 'test':
-        #     self.all_c2w = create_spheric_poses(self.all_c2w[:,:,3], n_steps=self.config.n_test_traj_steps)
-        #     self.all_images = torch.zeros((self.config.n_test_traj_steps, self.h, self.w, 3), dtype=torch.float32)
-        #     self.all_fg_masks = torch.zeros((self.config.n_test_traj_steps, self.h, self.w), dtype=torch.float32)
-        #     self.directions = self.directions[0].to(self.rank)
-        # else:
         self.all_images, self.all_c2w = self.all_images[i_split[self.split]], self.all_c2w[i_split[self.split]]
-        self.directions = self.directions[i_split[self.split]].to(self.rank)
-        self.all_fg_masks = torch.from_numpy(self.all_fg_masks)[i_split[self.split]]
-        # if render_random_pose:
-        #     render_poses = random_pose(extrinsics[i_all], 50)
-        # elif render_scene_interp:
-        #     render_poses = pose_interp(extrinsics[i_all], interp_fac)
-        # render_poses = spherical_poses(sscale * cam_scale_factor * np.eye(4))
-        
+        self.directions = self.directions[i_split[self.split]].float().to(self.rank)
+        self.all_fg_masks = torch.from_numpy(self.all_fg_masks)[i_split[self.split]].float().to(self.rank)
+
         near, far = 0., 1.
         ndc_coeffs = (-1., -1.)
 
+        self.directions = self.directions.float().to(self.rank)
         self.all_c2w, self.all_images, self.all_fg_masks = \
                 self.all_c2w.float().to(self.rank), \
                 self.all_images.float().to(self.rank), \

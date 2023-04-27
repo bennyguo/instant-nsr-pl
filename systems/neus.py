@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_efficient_distloss import flatten_eff_distloss
 
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.rank_zero import rank_zero_info, rank_zero_debug
 
 import models
+from models.utils import cleanup
 from models.ray_utils import get_rays
 import systems
 from systems.base import BaseSystem
@@ -23,7 +25,7 @@ class NeuSSystem(BaseSystem):
         self.criterions = {
             'psnr': PSNR()
         }
-        self.train_num_samples = self.config.model.train_num_rays * self.config.model.num_samples_per_ray
+        self.train_num_samples = self.config.model.train_num_rays * (self.config.model.num_samples_per_ray + self.config.model.get('num_samples_per_ray_bg', 0))
         self.train_num_rays = self.config.model.train_num_rays
 
     def forward(self, batch):
@@ -47,28 +49,29 @@ class NeuSSystem(BaseSystem):
             )
             directions = self.dataset.directions[y, x] if self.dataset.directions.ndim == 3 else self.dataset.directions[index, y, x]
             rays_o, rays_d = get_rays(directions, c2w)
-            rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1])
-            fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1)
+            rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1]).to(self.rank)
+            fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1).to(self.rank)
         else:
             c2w = self.dataset.all_c2w[index][0]
             directions = self.dataset.directions if self.dataset.directions.ndim == 3 else self.dataset.directions[index][0]
             rays_o, rays_d = get_rays(directions, c2w)
-            rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1])
-            fg_mask = self.dataset.all_fg_masks[index].view(-1)
+            rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1]).to(self.rank)
+            fg_mask = self.dataset.all_fg_masks[index].view(-1).to(self.rank)
 
         rays = torch.cat([rays_o, F.normalize(rays_d, p=2, dim=-1)], dim=-1)
 
         if stage in ['train']:
-            if self.config.model.background == 'white':
+            if self.config.model.background_color == 'white':
                 self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
-            elif self.config.model.background == 'random':
+            elif self.config.model.background_color == 'random':
                 self.model.background_color = torch.rand((3,), dtype=torch.float32, device=self.rank)
             else:
                 raise NotImplementedError
         else:
             self.model.background_color = torch.ones((3,), dtype=torch.float32, device=self.rank)
         
-        rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])
+        if self.dataset.apply_mask:
+            rgb = rgb * fg_mask[...,None] + self.model.background_color * (1 - fg_mask[...,None])
         
         batch.update({
             'rays': rays,
@@ -83,14 +86,14 @@ class NeuSSystem(BaseSystem):
 
         # update train_num_rays
         if self.config.model.dynamic_ray_sampling:
-            train_num_rays = int(self.train_num_rays * (self.train_num_samples / out['num_samples'].sum().item()))        
+            train_num_rays = int(self.train_num_rays * (self.train_num_samples / out['num_samples_full'].sum().item()))        
             self.train_num_rays = min(int(self.train_num_rays * 0.9 + train_num_rays * 0.1), self.config.model.max_train_num_rays)
 
-        loss_rgb_mse = F.mse_loss(out['comp_rgb'], batch['rgb'])
+        loss_rgb_mse = F.mse_loss(out['comp_rgb_full'][out['rays_valid_full'][...,0]], batch['rgb'][out['rays_valid_full'][...,0]])
         self.log('train/loss_rgb_mse', loss_rgb_mse)
         loss += loss_rgb_mse * self.C(self.config.system.loss.lambda_rgb_mse)
 
-        loss_rgb_l1 = F.l1_loss(out['comp_rgb'], batch['rgb'])
+        loss_rgb_l1 = F.l1_loss(out['comp_rgb_full'][out['rays_valid_full'][...,0]], batch['rgb'][out['rays_valid_full'][...,0]])
         self.log('train/loss_rgb', loss_rgb_l1)
         loss += loss_rgb_l1 * self.C(self.config.system.loss.lambda_rgb_l1)        
 
@@ -98,14 +101,30 @@ class NeuSSystem(BaseSystem):
         self.log('train/loss_eikonal', loss_eikonal)
         loss += loss_eikonal * self.C(self.config.system.loss.lambda_eikonal)
         
-        opacity = torch.clamp(out['opacity'], 1.e-3, 1.-1.e-3)
+        opacity = torch.clamp(out['opacity'].squeeze(-1), 1.e-3, 1.-1.e-3)
         loss_mask = binary_cross_entropy(opacity, batch['fg_mask'].float())
         self.log('train/loss_mask', loss_mask)
-        loss += loss_mask * (self.C(self.config.system.loss.lambda_mask) if self.dataset.use_mask else 0.0)
+        loss += loss_mask * (self.C(self.config.system.loss.lambda_mask) if self.dataset.has_mask else 0.0)
+
+        loss_opaque = binary_cross_entropy(opacity, opacity)
+        self.log('train/loss_opaque', loss_opaque)
+        loss += loss_opaque * self.C(self.config.system.loss.lambda_opaque)
 
         loss_sparsity = torch.exp(-self.config.system.loss.sparsity_scale * out['sdf_samples'].abs()).mean()
         self.log('train/loss_sparsity', loss_sparsity)
         loss += loss_sparsity * self.C(self.config.system.loss.lambda_sparsity)
+
+        # distortion loss proposed in MipNeRF360
+        # an efficient implementation from https://github.com/sunset1995/torch_efficient_distloss
+        if self.C(self.config.system.loss.lambda_distortion) > 0:
+            loss_distortion = flatten_eff_distloss(out['weights'], out['points'], out['intervals'], out['ray_indices'])
+            self.log('train/loss_distortion', loss_distortion)
+            loss += loss_distortion * self.C(self.config.system.loss.lambda_distortion)    
+
+        if self.config.model.learned_background and self.C(self.config.system.loss.lambda_distortion_bg) > 0:
+            loss_distortion_bg = flatten_eff_distloss(out['weights_bg'], out['points_bg'], out['intervals_bg'], out['ray_indices_bg'])
+            self.log('train/loss_distortion_bg', loss_distortion_bg)
+            loss += loss_distortion_bg * self.C(self.config.system.loss.lambda_distortion_bg)        
 
         losses_model_reg = self.model.regularizations(out)
         for name, value in losses_model_reg.items():
@@ -139,16 +158,17 @@ class NeuSSystem(BaseSystem):
     
     def validation_step(self, batch, batch_idx):
         out = self(batch)
-        psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
-        W, H = self.dataset.w, self.dataset.h
-        img = out['comp_rgb'].view(H, W, 3)
-        depth = out['depth'].view(H, W)
-        opacity = out['opacity'].view(H, W)
+        psnr = self.criterions['psnr'](out['comp_rgb_full'].to(batch['rgb']), batch['rgb'])
+        W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
-            {'type': 'rgb', 'img': img, 'kwargs': {'data_format': 'HWC'}},
-            {'type': 'grayscale', 'img': depth, 'kwargs': {}},
-            {'type': 'grayscale', 'img': opacity, 'kwargs': {'cmap': None, 'data_range': (0, 1)}}
+            {'type': 'rgb', 'img': out['comp_rgb_full'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}}
+        ] + ([
+            {'type': 'rgb', 'img': out['comp_rgb_bg'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
+            {'type': 'rgb', 'img': out['comp_rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
+        ] if self.config.model.learned_background else []) + [
+            {'type': 'grayscale', 'img': out['depth'].view(H, W), 'kwargs': {}},
+            {'type': 'rgb', 'img': out['comp_normal'].view(H, W, 3), 'kwargs': {'data_format': 'HWC', 'data_range': (-1, 1)}}
         ])
         return {
             'psnr': psnr,
@@ -179,16 +199,17 @@ class NeuSSystem(BaseSystem):
 
     def test_step(self, batch, batch_idx):
         out = self(batch)
-        psnr = self.criterions['psnr'](out['comp_rgb'], batch['rgb'])
-        W, H = self.dataset.w, self.dataset.h
-        img = out['comp_rgb'].view(H, W, 3)
-        depth = out['depth'].view(H, W)
-        opacity = out['opacity'].view(H, W)
+        psnr = self.criterions['psnr'](out['comp_rgb_full'].to(batch['rgb']), batch['rgb'])
+        W, H = self.dataset.img_wh
         self.save_image_grid(f"it{self.global_step}-test/{batch['index'][0].item()}.png", [
             {'type': 'rgb', 'img': batch['rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
-            {'type': 'rgb', 'img': img, 'kwargs': {'data_format': 'HWC'}},
-            {'type': 'grayscale', 'img': depth, 'kwargs': {}},
-            {'type': 'grayscale', 'img': opacity, 'kwargs': {'cmap': None, 'data_range': (0, 1)}}
+            {'type': 'rgb', 'img': out['comp_rgb_full'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}}
+        ] + ([
+            {'type': 'rgb', 'img': out['comp_rgb_bg'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
+            {'type': 'rgb', 'img': out['comp_rgb'].view(H, W, 3), 'kwargs': {'data_format': 'HWC'}},
+        ] if self.config.model.learned_background else []) + [
+            {'type': 'grayscale', 'img': out['depth'].view(H, W), 'kwargs': {}},
+            {'type': 'rgb', 'img': out['comp_normal'].view(H, W, 3), 'kwargs': {'data_format': 'HWC', 'data_range': (-1, 1)}}
         ])
         return {
             'psnr': psnr,
@@ -222,9 +243,11 @@ class NeuSSystem(BaseSystem):
                 fps=30
             )
             
-            mesh = self.model.isosurface()
-            self.save_mesh(
-                f"it{self.global_step}-{self.config.model.geometry.isosurface.method}{self.config.model.geometry.isosurface.resolution}.obj",
-                mesh['v_pos'],
-                mesh['t_pos_idx'],
-            )
+            self.export()
+    
+    def export(self):
+        mesh = self.model.export(self.config.export)
+        self.save_mesh(
+            f"it{self.global_step}-{self.config.model.geometry.isosurface.method}{self.config.model.geometry.isosurface.resolution}.obj",
+            **mesh
+        )        
