@@ -179,7 +179,7 @@ class VolumeSDF(BaseImplicitGeometry):
                             points_ + torch.as_tensor([0.0, -eps, 0.0]).to(points_),
                             points_ + torch.as_tensor([0.0, 0.0, eps]).to(points_),
                             points_ + torch.as_tensor([0.0, 0.0, -eps]).to(points_)
-                        ], dim=0).clamp(0, 1)
+                        ], dim=0).clamp(-self.radius, self.radius)
                         points_d = scale_anything(points_d_, (-self.radius, self.radius), (0, 1))
                         points_d_sdf = self.network(self.encoding(points_d.view(-1, 3)))[...,0].view(6, *points.shape[:-1]).float()
                         grad = torch.stack([
