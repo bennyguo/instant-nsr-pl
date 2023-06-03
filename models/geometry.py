@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from pytorch_lightning.utilities.rank_zero import rank_zero_info
+
 import models
 from models.base import BaseModel
 from models.utils import scale_anything, get_activation, cleanup, chunk_batch
@@ -146,8 +148,14 @@ class VolumeSDF(BaseImplicitGeometry):
         network = get_mlp(encoding.n_output_dims, self.n_output_dims, self.config.mlp_network_config)
         self.encoding, self.network = encoding, network
         self.grad_type = self.config.grad_type
+        self.finite_difference_eps = self.config.get('finite_difference_eps', 1e-3)
+        # the actual value used in training
+        # will update at certain steps if finite_difference_eps="progressive"
+        self._finite_difference_eps = None
+        if self.grad_type == 'finite_difference':
+            rank_zero_info(f"Using finite difference to compute gradients with eps={self.finite_difference_eps}")
     
-    def forward(self, points, with_grad=True, with_feature=True):
+    def forward(self, points, with_grad=True, with_feature=True, with_laplace=False):
         with torch.inference_mode(torch.is_inference_mode_enabled() and not (with_grad and self.grad_type == 'analytic')):
             with torch.set_grad_enabled(self.training or (with_grad and self.grad_type == 'analytic')):
                 if with_grad and self.grad_type == 'analytic':
@@ -171,28 +179,33 @@ class VolumeSDF(BaseImplicitGeometry):
                             create_graph=True, retain_graph=True, only_inputs=True
                         )[0]
                     elif self.grad_type == 'finite_difference':
-                        eps = 0.001
-                        points_d_ = torch.stack([
-                            points_ + torch.as_tensor([eps, 0.0, 0.0]).to(points_),
-                            points_ + torch.as_tensor([-eps, 0.0, 0.0]).to(points_),
-                            points_ + torch.as_tensor([0.0, eps, 0.0]).to(points_),
-                            points_ + torch.as_tensor([0.0, -eps, 0.0]).to(points_),
-                            points_ + torch.as_tensor([0.0, 0.0, eps]).to(points_),
-                            points_ + torch.as_tensor([0.0, 0.0, -eps]).to(points_)
-                        ], dim=0).clamp(-self.radius, self.radius)
+                        eps = self._finite_difference_eps
+                        offsets = torch.as_tensor(
+                            [
+                                [eps, 0.0, 0.0],
+                                [-eps, 0.0, 0.0],
+                                [0.0, eps, 0.0],
+                                [0.0, -eps, 0.0],
+                                [0.0, 0.0, eps],
+                                [0.0, 0.0, -eps],
+                            ]
+                        ).to(points_)
+                        points_d_ = (points_[...,None,:] + offsets).clamp(-self.radius, self.radius)
                         points_d = scale_anything(points_d_, (-self.radius, self.radius), (0, 1))
-                        points_d_sdf = self.network(self.encoding(points_d.view(-1, 3)))[...,0].view(6, *points.shape[:-1]).float()
-                        grad = torch.stack([
-                            0.5 * (points_d_sdf[0] - points_d_sdf[1]) / eps,
-                            0.5 * (points_d_sdf[2] - points_d_sdf[3]) / eps,
-                            0.5 * (points_d_sdf[4] - points_d_sdf[5]) / eps,
-                        ], dim=-1)
+                        points_d_sdf = self.network(self.encoding(points_d.view(-1, 3)))[...,0].view(*points.shape[:-1], 6).float()
+                        grad = 0.5 * (points_d_sdf[..., 0::2] - points_d_sdf[..., 1::2]) / eps  
+                        
+                        if with_laplace:
+                            laplace = (points_d_sdf[..., 0::2] + points_d_sdf[..., 1::2] - 2 * sdf[..., None]) / (eps ** 2)
 
         rv = [sdf]
         if with_grad:
             rv.append(grad)
         if with_feature:
             rv.append(feature)
+        if with_laplace:
+            assert self.config.grad_type == 'finite_difference', "Laplace computation is only supported with grad_type='finite_difference'"
+            rv.append(laplace)
         rv = [v if self.training else v.detach() for v in rv]
         return rv[0] if len(rv) == 1 else rv
     
@@ -205,4 +218,21 @@ class VolumeSDF(BaseImplicitGeometry):
     
     def update_step(self, epoch, global_step):
         update_module_step(self.encoding, epoch, global_step)    
-        update_module_step(self.network, epoch, global_step)    
+        update_module_step(self.network, epoch, global_step)  
+        if self.grad_type == 'finite_difference':
+            if isinstance(self.finite_difference_eps, float):
+                self._finite_difference_eps = self.finite_difference_eps
+            elif self.finite_difference_eps == 'progressive':
+                hg_conf = self.config.xyz_encoding_config
+                assert hg_conf.otype == "ProgressiveBandHashGrid", "finite_difference_eps='progressive' only works with ProgressiveBandHashGrid"
+                current_level = min(
+                    hg_conf.start_level + max(global_step - hg_conf.start_step, 0) // hg_conf.update_steps,
+                    hg_conf.n_levels
+                )
+                grid_res = hg_conf.base_resolution * hg_conf.per_level_scale**(current_level - 1)
+                grid_size = 2 * self.config.radius / grid_res
+                if grid_size != self._finite_difference_eps:
+                    rank_zero_info(f"Update finite_difference_eps to {grid_size}")
+                self._finite_difference_eps = grid_size
+            else:
+                raise ValueError(f"Unknown finite_difference_eps={self.finite_difference_eps}")
