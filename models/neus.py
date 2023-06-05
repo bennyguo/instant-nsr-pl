@@ -136,11 +136,13 @@ class NeuSModel(BaseModel):
         c = prev_cdf
 
         alpha = ((p + 1e-5) / (c + 1e-5)).view(-1).clip(0.0, 1.0)
-        # alpha from HF-NeuS
         hf_neus = False
         if hf_neus:
+            # cdf = sigmoid(sdf * inv_s) as proposed in HF-NeuS
             cdf = torch.sigmoid(torch.unsqueeze(sdf, -1) * inv_s)
+            # e = sigma * step
             e = inv_s * (1 - cdf) * (-iter_cos) * self.render_step_size
+            # alpha-composition, where alpha = 1 − exp(−sigma * step)
             alpha = (1 - torch.exp(-e)).view(-1).clip(0.0, 1.0)
         return alpha
 
