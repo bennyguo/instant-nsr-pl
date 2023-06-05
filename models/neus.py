@@ -136,6 +136,12 @@ class NeuSModel(BaseModel):
         c = prev_cdf
 
         alpha = ((p + 1e-5) / (c + 1e-5)).view(-1).clip(0.0, 1.0)
+        # alpha from HF-NeuS
+        hf_neus = False
+        if hf_neus:
+            cdf = torch.sigmoid(torch.unsqueeze(sdf, -1) * inv_s)
+            e = inv_s * (1 - cdf) * (-iter_cos) * self.render_step_size
+            alpha = (1 - torch.exp(-e)).view(-1).clip(0.0, 1.0)
         return alpha
 
     def forward_bg_(self, rays):
@@ -253,6 +259,7 @@ class NeuSModel(BaseModel):
                 'sdf_samples': sdf,
                 'sdf_grad_samples': sdf_grad,
                 'weights': weights.view(-1),
+                'alpha': alpha.view(-1),
                 'points': midpoints.view(-1),
                 'intervals': dists.view(-1),
                 'ray_indices': ray_indices.view(-1)                

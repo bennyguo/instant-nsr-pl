@@ -121,6 +121,7 @@ system:
     lambda_sparsity: 0.0
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
+    lambda_entropy: 0.0
     lambda_opaque: 0.01
     sparsity_scale: 1.
   optimizer:

@@ -33,7 +33,7 @@ class NeuSSystem(BaseSystem):
     
     def preprocess_data(self, batch, stage):
         if 'index' in batch: # validation / testing
-            index = batch['index']
+            index = batch['index'].to(self.dataset.all_images.device)
         else:
             if self.config.model.batch_image_sampling:
                 index = torch.randint(0, len(self.dataset.all_images), size=(self.train_num_rays,), device=self.dataset.all_images.device)
@@ -137,6 +137,14 @@ class NeuSSystem(BaseSystem):
             self.log(f'train/loss_{name}', value)
             loss_ = value * self.C(self.config.system.loss[f"lambda_{name}"])
             loss += loss_
+
+        # regulazing rendering weights (transparency, alpha), encourage them to be either 0 or 1, with 1e-3
+        if self.C(self.config.system.loss.lambda_entropy) > 0:
+            weights = out['weights'].clamp(1e-5, 1 - 1e-5)
+            loss_entropy = binary_cross_entropy(weights, weights).mean()
+            alpha = out['alpha'].clamp(1e-5, 1 - 1e-5)
+            loss_entropy += binary_cross_entropy(alpha, alpha).mean()
+            loss += self.C(self.config.system.loss.lambda_entropy) * loss_entropy
         
         self.log('train/inv_s', out['inv_s'], prog_bar=True)
 
