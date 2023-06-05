@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import tinycudann as tcnn
 
-from pytorch_lightning.utilities.rank_zero import rank_zero_debug
+from pytorch_lightning.utilities.rank_zero import rank_zero_debug, rank_zero_info
 
 from utils.misc import config_to_primitive, get_rank
 from models.utils import get_activation
@@ -60,7 +60,7 @@ class ProgressiveBandHashGrid(nn.Module):
     def update_step(self, epoch, global_step):
         current_level = min(self.start_level + max(global_step - self.start_step, 0) // self.update_steps, self.n_level)
         if current_level > self.current_level:
-            rank_zero_debug(f'Update current level to {current_level}')
+            rank_zero_info(f'Update grid level to {current_level}')
         self.current_level = current_level
         self.mask[:self.current_level * self.n_features_per_level] = 1.
 
@@ -105,6 +105,7 @@ class VanillaMLP(nn.Module):
         self.layers = nn.Sequential(*self.layers)
         self.output_activation = get_activation(config['output_activation'])
     
+    @torch.cuda.amp.autocast(False)
     def forward(self, x):
         x = self.layers(x.float())
         x = self.output_activation(x)

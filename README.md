@@ -18,6 +18,10 @@ This repository contains a concise and extensible implementation of NeRF and Neu
 **Please subscribe to [#26](https://github.com/bennyguo/instant-nsr-pl/issues/26) for our latest findings on quality improvements!**
 
 ## News
+
+🔥🔥🔥 Check out my new project on 3D content generation: https://github.com/threestudio-project/threestudio 🔥🔥🔥
+
+- 06/03/2023: Add an implementation of [Neuralangelo](https://research.nvidia.com/labs/dir/neuralangelo/). See [here](https://github.com/bennyguo/instant-nsr-pl#training-on-DTU) for details.
 - 03/31/2023: NeuS model now supports background modeling. You could try on the DTU dataset provided by [NeuS](https://drive.google.com/drive/folders/1Nlzejs4mfPuJYORLbDEUDWlc9IZIbU0C?usp=sharing) or [IDR](https://www.dropbox.com/sh/5tam07ai8ch90pf/AADniBT3dmAexvm_J1oL__uoa) following [the instruction here](https://github.com/bennyguo/instant-nsr-pl#training-on-DTU).
 - 02/11/2023: NeRF model now supports unbounded 360 scenes with learned background. You could try on [MipNeRF 360 data](http://storage.googleapis.com/gresearch/refraw360/360_v2.zip) following [the COLMAP configuration](https://github.com/bennyguo/instant-nsr-pl#training-on-custom-colmap-data).
 
@@ -55,10 +59,13 @@ Download preprocessed DTU data provided by [NeuS](https://drive.google.com/drive
 # train NeuS on DTU without mask
 python launch.py --config configs/neus-dtu.yaml --gpu 0 --train
 # train NeuS on DTU with mask
-python launch.py --config configs/neus-dtu.yaml --gpu 0 --train system.loss.lambda_mask=0.1
+python launch.py --config configs/neus-dtu-wmask.yaml --gpu 0 --train
+# train NeuS on DTU with mask using tricks from Neuralangelo (experimental)
+python launch.py --config configs/neuralangelo-dtu-wmask.yaml --gpu 0 --train
 ```
 Notes:
 - PSNR in the testing stage is meaningless, as we simply compare to pure white images in testing.
+- The results of Neuralangelo can't reach those in the original paper. Some potential improvements: more iterations; larger `system.geometry.xyz_encoding_config.update_steps`; larger `system.geometry.xyz_encoding_config.n_features_per_level`; larger `system.geometry.xyz_encoding_config.log2_hashmap_size`; adopting curvature loss.
 
 ### Training on Custom COLMAP Data
 To get COLMAP data from custom images, you should have COLMAP installed (see [here](https://colmap.github.io/install.html) for installation instructions). Then put your images in the `images/` folder, and run `scripts/imgs2poses.py` specifying the path containing the `images/` folder. For example:

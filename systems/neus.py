@@ -120,6 +120,12 @@ class NeuSSystem(BaseSystem):
         self.log('train/loss_sparsity', loss_sparsity)
         loss += loss_sparsity * self.C(self.config.system.loss.lambda_sparsity)
 
+        if self.C(self.config.system.loss.lambda_curvature) > 0:
+            assert 'sdf_laplace_samples' in out, "Need geometry.grad_type='finite_difference' to get SDF Laplace samples"
+            loss_curvature = out['sdf_laplace_samples'].abs().mean()
+            self.log('train/loss_curvature', loss_curvature)
+            loss += loss_curvature * self.C(self.config.system.loss.lambda_curvature)
+
         # distortion loss proposed in MipNeRF360
         # an efficient implementation from https://github.com/sunset1995/torch_efficient_distloss
         if self.C(self.config.system.loss.lambda_distortion) > 0:
