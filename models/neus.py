@@ -125,19 +125,20 @@ class NeuSModel(BaseModel):
         iter_cos = -(F.relu(-true_cos * 0.5 + 0.5) * (1.0 - self.cos_anneal_ratio) +
                      F.relu(-true_cos) * self.cos_anneal_ratio)  # always non-positive
 
-        # Estimate signed distances at section points
-        estimated_next_sdf = sdf[...,None] + iter_cos * dists.reshape(-1, 1) * 0.5
-        estimated_prev_sdf = sdf[...,None] - iter_cos * dists.reshape(-1, 1) * 0.5
+        sdf2weights = 'neus'
+        if sdf2weights is 'neus':
+            # Estimate signed distances at section points
+            estimated_next_sdf = sdf[...,None] + iter_cos * dists.reshape(-1, 1) * 0.5
+            estimated_prev_sdf = sdf[...,None] - iter_cos * dists.reshape(-1, 1) * 0.5
 
-        prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
-        next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
+            prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
+            next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
 
-        p = prev_cdf - next_cdf
-        c = prev_cdf
+            p = prev_cdf - next_cdf
+            c = prev_cdf
 
-        alpha = ((p + 1e-5) / (c + 1e-5)).view(-1).clip(0.0, 1.0)
-        hf_neus = False
-        if hf_neus:
+            alpha = ((p + 1e-5) / (c + 1e-5)).view(-1).clip(0.0, 1.0)
+        elif sdf2weights is 'hf_neus':
             # cdf = sigmoid(sdf * inv_s) as proposed in HF-NeuS
             cdf = torch.sigmoid(torch.unsqueeze(sdf, -1) * inv_s)
             # e = sigma * step

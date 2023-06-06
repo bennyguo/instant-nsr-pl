@@ -116,7 +116,9 @@ system:
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
     lambda_opaque: 0.0
+    lambda_entropy: 0.0
     sparsity_scale: 1.
+    lambda_entropy: 0.0
   optimizer:
     name: AdamW
     args:
