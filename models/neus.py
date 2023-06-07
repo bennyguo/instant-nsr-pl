@@ -125,12 +125,12 @@ class NeuSModel(BaseModel):
         iter_cos = -(F.relu(-true_cos * 0.5 + 0.5) * (1.0 - self.cos_anneal_ratio) +
                      F.relu(-true_cos) * self.cos_anneal_ratio)  # always non-positive
 
-        sdf2weights = 'neus'
-        if sdf2weights is 'neus':
-            # Estimate signed distances at section points
-            estimated_next_sdf = sdf[...,None] + iter_cos * dists.reshape(-1, 1) * 0.5
-            estimated_prev_sdf = sdf[...,None] - iter_cos * dists.reshape(-1, 1) * 0.5
+        # Estimate signed distances at section points
+        estimated_next_sdf = sdf[...,None] + iter_cos * dists.reshape(-1, 1) * 0.5
+        estimated_prev_sdf = sdf[...,None] - iter_cos * dists.reshape(-1, 1) * 0.5
 
+        assert self.config.geometry.sdf2weight in ['neus', 'nsr', 'hf_neus']
+        if self.config.geometry.sdf2weight == 'neus':
             prev_cdf = torch.sigmoid(estimated_prev_sdf * inv_s)
             next_cdf = torch.sigmoid(estimated_next_sdf * inv_s)
 
@@ -138,12 +138,23 @@ class NeuSModel(BaseModel):
             c = prev_cdf
 
             alpha = ((p + 1e-5) / (c + 1e-5)).view(-1).clip(0.0, 1.0)
-        elif sdf2weights is 'hf_neus':
+        elif self.config.geometry.sdf2weight == 'nsr':
+            # Instant-NSR applies 𝜋(.) upon the estimated sdf values
+            prev_sdf_pi = torch.sigmoid(estimated_prev_sdf * inv_s) * (1 - torch.exp(-estimated_prev_sdf * inv_s))
+            next_sdf_pi = torch.sigmoid(estimated_next_sdf * inv_s) * (1 - torch.exp(-estimated_next_sdf * inv_s))
+            prev_cdf = torch.sigmoid(prev_sdf_pi * inv_s)
+            next_cdf = torch.sigmoid(next_sdf_pi * inv_s)
+
+            p = prev_cdf - next_cdf
+            c = prev_cdf
+
+            alpha = ((p + 1e-5) / (c + 1e-5)).view(-1).clip(0.0, 1.0)
+        elif self.config.geometry.sdf2weight == 'hf_neus':
             # cdf = sigmoid(sdf * inv_s) as proposed in HF-NeuS
             cdf = torch.sigmoid(torch.unsqueeze(sdf, -1) * inv_s)
             # e = sigma * step
             e = inv_s * (1 - cdf) * (-iter_cos) * self.render_step_size
-            # alpha-composition, where alpha = 1 − exp(−sigma * step)
+            # alpha-composition, which is 1 − exp(−sigma * step)
             alpha = (1 - torch.exp(-e)).view(-1).clip(0.0, 1.0)
         return alpha
 

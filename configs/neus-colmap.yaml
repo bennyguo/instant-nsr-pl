@@ -35,6 +35,7 @@ model:
     name: volume-sdf
     radius: ${model.radius}
     feature_dim: 13
+    sdf2weight: nsr
     grad_type: analytic
     isosurface:
       method: mc
