@@ -1,24 +1,33 @@
-name: nerf-blender-${dataset.scene}
-tag: ""
+name: nerf-co3d-debug
+tag: ''
 seed: 42
 
 dataset:
-  name: blender
-  scene: ???
-  root_dir: /home/wangchen/nas/nerf_data/nerf_synthetic/${dataset.scene}
+  name: co3d
+  root_dir: ./co3d_single/apple/189_20393_38136
   img_wh:
-    - 800
-    - 800
-  # img_downscale: 1 # specify training image size by either img_wh or img_downscale
-  near_plane: 2.0
-  far_plane: 6.0
-  train_split: "train"
-  val_split: "val"
-  test_split: "test"
+    - 1282
+    - 719
+  near_plane: 0.0
+  far_plane: 1.0
+  spheric_poses: false
+  use_pixel_centers: true
+  load_preprocessed: false
+  cam_scale_factor: 0.95 # inherited from plenoxels
+  max_num_frames: 300 # use less frames for debugging
+  v2_mode: true
+  apply_mask: true
+  box_crop: true
+  box_crop_mask_thr: 0.4
+  box_crop_context: 0.0 # The amount of additional padding added to each dimention of the cropping bounding box, relative to vox size.
+  train_split: 'train'
+  val_split: 'val'
+  test_split: 'test'
+  n_test_traj_steps: 120
 
 model:
   name: nerf
-  radius: 1.5
+  radius: 0.8
   num_samples_per_ray: 1024
   train_num_rays: 256
   max_train_num_rays: 8192
@@ -27,7 +36,7 @@ model:
   batch_image_sampling: true
   randomized: true
   ray_chunk: 32768
-  learned_background: false
+  learned_background: true
   background_color: random
   geometry:
     name: volume-density
@@ -37,7 +46,7 @@ model:
     density_bias: -1
     isosurface:
       method: mc
-      resolution: 256
+      resolution: 512
       chunk: 2097152
       threshold: 5.0
     xyz_encoding_config:
@@ -46,7 +55,7 @@ model:
       n_features_per_level: 2
       log2_hashmap_size: 19
       base_resolution: 16
-      per_level_scale: 1.447269237440378
+      per_level_scale: 1.447269237440378  
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
@@ -58,21 +67,22 @@ model:
     input_feature_dim: ${model.geometry.feature_dim}
     dir_encoding_config:
       otype: SphericalHarmonics
-      degree: 4
+      degree: 4    
     mlp_network_config:
       otype: FullyFusedMLP
       activation: ReLU
       output_activation: Sigmoid
       n_neurons: 64
       n_hidden_layers: 2
-
+  
 system:
   name: nerf-system
   loss:
     lambda_rgb: 1.
+    lambda_opaque: 0.
     lambda_distortion: 0.
   optimizer:
-    name: AdamW
+    name: Adam
     args:
       lr: 0.01
       betas: [0.9, 0.99]
@@ -90,14 +100,14 @@ checkpoint:
 
 export:
   chunk_size: 2097152
-  export_vertex_color: False
-
+  export_vertex_color: False  
+  
 trainer:
   max_steps: 20000
   log_every_n_steps: 200
   num_sanity_val_steps: 0
-  val_check_interval: 10000
+  val_check_interval: 5000
   limit_train_batches: 1.0
   limit_val_batches: 2
-  enable_progress_bar: true
+  enable_progress_bar: true 
   precision: 16

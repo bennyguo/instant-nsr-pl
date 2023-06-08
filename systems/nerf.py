@@ -51,6 +51,7 @@ class NeRFSystem(BaseSystem):
             elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
                 directions = self.dataset.directions[index, y, x]
             rays_o, rays_d = get_rays(directions, c2w)
+            # import pdb; pdb.set_trace();
             rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1]).to(self.rank)
             fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1).to(self.rank)
         else:

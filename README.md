@@ -67,6 +67,17 @@ Notes:
 - PSNR in the testing stage is meaningless, as we simply compare to pure white images in testing.
 - The results of Neuralangelo can't reach those in the original paper. Some potential improvements: more iterations; larger `system.geometry.xyz_encoding_config.update_steps`; larger `system.geometry.xyz_encoding_config.n_features_per_level`; larger `system.geometry.xyz_encoding_config.log2_hashmap_size`; adopting curvature loss.
 
+### Training on Co3D
+Download Co3D data according to its official [Github Repo](https://github.com/facebookresearch/co3d) and set the `dataset.root_dir` to point to the target object directory (not category directory). Currently we select every 10 frames for testing.
+
+```bash
+# train NeRF
+python launch.py --config configs/nerf-co3d.yaml --gpu 0 --train
+# train NeuS on Co3D with mask
+python launch.py --config configs/neus-co3d.yaml --gpu 0 --train system.loss.lambda_mask=0.1
+```
+
+
 ### Training on Custom COLMAP Data
 To get COLMAP data from custom images, you should have COLMAP installed (see [here](https://colmap.github.io/install.html) for installation instructions). Then put your images in the `images/` folder, and run `scripts/imgs2poses.py` specifying the path containing the `images/` folder. For example:
 ```bash
