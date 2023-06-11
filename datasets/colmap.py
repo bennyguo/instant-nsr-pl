@@ -55,7 +55,7 @@ def normalize_poses(poses, pts, up_est_method, center_est_method, cam_downscale=
     elif center_est_method == 'point':
         # first estimation scene center as the average of all camera positions
         # later we'll use the center of all points bounded by the cameras as the final scene center
-        center = poses[...,3].mean(0)
+        center = pts.mean(0)
     else:
         raise NotImplementedError(f'Unknown center estimation method: {center_est_method}')
 

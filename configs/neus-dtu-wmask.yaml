@@ -33,6 +33,7 @@ model:
     radius: ${model.radius}
     feature_dim: 13
     grad_type: analytic
+    sdf2weight: neus
     isosurface:
       method: mc
       resolution: 512

@@ -34,6 +34,7 @@ model:
     feature_dim: 13
     grad_type: finite_difference
     finite_difference_eps: progressive
+    sdf2weight: neus
     isosurface:
       method: mc
       resolution: 512

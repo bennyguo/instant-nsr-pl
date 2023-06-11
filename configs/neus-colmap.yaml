@@ -35,7 +35,7 @@ model:
     name: volume-sdf
     radius: ${model.radius}
     feature_dim: 13
-    sdf2weight: nsr
+    sdf2weight: neus
     grad_type: analytic
     isosurface:
       method: mc
@@ -118,7 +118,7 @@ system:
     lambda_rgb_l1: 0.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
-    lambda_curvature: 0.
+    lambda_curvature: [5000, 0.00001, 0, 100000] # topology warmup
     lambda_sparsity: 0.0
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
