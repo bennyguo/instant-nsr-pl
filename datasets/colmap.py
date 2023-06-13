@@ -237,9 +237,12 @@ class ColmapDatasetBase():
                 c2w[:,1:3] *= -1. # COLMAP => OpenGL
                 all_c2w.append(c2w)
                 if self.split in ['train', 'val']:
-                    img_path = os.path.join(self.config.root_dir, 'images', d.name)
+                    img_path = os.path.join(self.config.root_dir, f"images_{self.config.img_downscale}", d.name)
+                    if not os.path.exists(img_path):
+                        img_path = os.path.join(self.config.root_dir, 'images', d.name)
                     img = Image.open(img_path)
-                    img = img.resize(img_wh, Image.BICUBIC)
+                    if img.size[0] != w or img.size[1] != h:
+                        img = img.resize(img_wh, Image.BICUBIC)
                     img = TF.to_tensor(img).permute(1, 2, 0)[...,:3]
                     img = img.to(self.rank) if self.config.load_data_on_gpu else img.cpu()
                     if has_mask:
