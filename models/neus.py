@@ -158,7 +158,7 @@ class NeuSModel(BaseModel):
             alpha = (1 - torch.exp(-e)).view(-1).clip(0.0, 1.0)
         return alpha
 
-    def forward_bg_(self, rays):
+    def forward_bg_(self, rays, camera_indices):
         n_rays = rays.shape[0]
         rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
 
@@ -196,7 +196,7 @@ class NeuSModel(BaseModel):
         intervals = t_ends - t_starts
 
         density, feature = self.geometry_bg(positions) 
-        rgb = self.texture_bg(feature, t_dirs)
+        rgb = self.texture_bg(feature, t_dirs, camera_indices, ray_indices)
 
         weights = render_weight_from_density(t_starts, t_ends, density[...,None], ray_indices=ray_indices, n_rays=n_rays)
         opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
@@ -222,7 +222,7 @@ class NeuSModel(BaseModel):
 
         return out
 
-    def forward_(self, rays):
+    def forward_(self, rays, camera_indices):
         n_rays = rays.shape[0]
         rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
 
@@ -252,7 +252,7 @@ class NeuSModel(BaseModel):
             sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True)
         normal = F.normalize(sdf_grad, p=2, dim=-1)
         alpha = self.get_alpha(sdf, normal, t_dirs, dists)[...,None]
-        rgb = self.texture(feature, t_dirs, normal)
+        rgb = self.texture(feature, t_dirs, camera_indices, ray_indices, normal)
 
         weights = render_weight_from_alpha(alpha, ray_indices=ray_indices, n_rays=n_rays)
         opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
@@ -287,7 +287,7 @@ class NeuSModel(BaseModel):
                 })
 
         if self.config.learned_background:
-            out_bg = self.forward_bg_(rays)
+            out_bg = self.forward_bg_(rays, camera_indices)
         else:
             out_bg = {
                 'comp_rgb': self.background_color[None,:].expand(*comp_rgb.shape),
@@ -307,11 +307,11 @@ class NeuSModel(BaseModel):
             **{k + '_full': v for k, v in out_full.items()}
         }
 
-    def forward(self, rays):
+    def forward(self, rays, camera_indices):
         if self.training:
-            out = self.forward_(rays)
+            out = self.forward_(rays, camera_indices)
         else:
-            out = chunk_batch(self.forward_, self.config.ray_chunk, True, rays)
+            out = chunk_batch(self.forward_, self.config.ray_chunk, True, rays, camera_indices)
         return {
             **out,
             'inv_s': self.variance.inv_s

@@ -29,7 +29,7 @@ class NeuSSystem(BaseSystem):
         self.train_num_rays = self.config.model.train_num_rays
 
     def forward(self, batch):
-        return self.model(batch['rays'])
+        return self.model(batch['rays'], batch['camera_indices'])
     
     def preprocess_data(self, batch, stage):
         if 'index' in batch: # validation / testing
@@ -82,7 +82,8 @@ class NeuSSystem(BaseSystem):
         batch.update({
             'rays': rays,
             'rgb': rgb,
-            'fg_mask': fg_mask
+            'fg_mask': fg_mask,
+            'camera_indices': index
         })      
     
     def training_step(self, batch, batch_idx):
