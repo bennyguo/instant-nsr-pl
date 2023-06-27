@@ -12,6 +12,7 @@ dataset:
   n_test_traj_steps: 120
   apply_mask: false
   load_data_on_gpu: false
+  num_images: 379
 
 model:
   name: neus
@@ -64,8 +65,7 @@ model:
       weight_norm: true
   texture:
     name: volume-radiance
-    # input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
-    input_feature_dim: ${add:${add:${model.geometry.feature_dim},3},${model.texture.appearance_embedding_dim}} # surface normal as additional input
+    input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
     dir_encoding_config:
       otype: SphericalHarmonics
       degree: 4
@@ -76,9 +76,10 @@ model:
       n_neurons: 64
       n_hidden_layers: 2
     color_activation: sigmoid
+    num_images: ${dataset.num_images}
     use_appearance_embedding: true
     use_average_appearance_embedding: ture
-    appearance_embedding_dim: 17
+    appearance_embedding_dim: 32
   # background model configurations
   num_samples_per_ray_bg: 256
   geometry_bg:
@@ -103,8 +104,7 @@ model:
       n_hidden_layers: 1
   texture_bg:
     name: volume-radiance
-    # input_feature_dim: ${model.geometry_bg.feature_dim}
-    input_feature_dim: ${add:${model.geometry_bg.feature_dim},${model.texture_bg.appearance_embedding_dim}}
+    input_feature_dim: ${model.geometry_bg.feature_dim}
     dir_encoding_config:
       otype: SphericalHarmonics
       degree: 4
@@ -115,9 +115,10 @@ model:
       n_neurons: 64
       n_hidden_layers: 2
     color_activation: sigmoid
+    num_images: ${dataset.num_images}
     use_appearance_embedding: true
     use_average_appearance_embedding: ture
-    appearance_embedding_dim: 17
+    appearance_embedding_dim: 32
 
 system:
   name: neus-system
