@@ -252,7 +252,7 @@ class NeuSModel(BaseModel):
             sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True)
         normal = F.normalize(sdf_grad, p=2, dim=-1)
         alpha = self.get_alpha(sdf, normal, t_dirs, dists)[...,None]
-        rgb = self.texture(feature, t_dirs, camera_indices, ray_indices, normal)
+        rgb = self.texture(feature, t_dirs, camera_indices.to(self.rank), ray_indices, normal)
 
         weights = render_weight_from_alpha(alpha, ray_indices=ray_indices, n_rays=n_rays)
         opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
@@ -337,6 +337,6 @@ class NeuSModel(BaseModel):
         if export_config.export_vertex_color:
             _, sdf_grad, feature = chunk_batch(self.geometry, export_config.chunk_size, False, mesh['v_pos'].to(self.rank), with_grad=True, with_feature=True)
             normal = F.normalize(sdf_grad, p=2, dim=-1)
-            rgb = self.texture(feature, -normal, normal) # set the viewing directions to the normal to get "albedo"
+            rgb = self.texture(feature, -normal, torch.empty(0), torch.empty(0), normal) # set the viewing directions to the normal to get "albedo"
             mesh['v_rgb'] = rgb.cpu()
         return mesh

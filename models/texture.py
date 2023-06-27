@@ -5,14 +5,7 @@ import models
 from models.utils import get_activation
 from models.network_utils import get_encoding, get_mlp
 from systems.utils import update_module_step
-
 from field_components.embedding import Embedding
-from field_components.encodings import (
-    NeRFEncoding,
-    PeriodicVolumeEncoding,
-    TensorVMEncoding,
-)
-
 
 @models.register('volume-radiance')
 class VolumeRadiance(nn.Module):
@@ -39,11 +32,14 @@ class VolumeRadiance(nn.Module):
         if self.config.use_appearance_embedding:
             if self.training:
                 appe_embd = self.embedding_appearance(camera_indices)
+                appe_embd = appe_embd[ray_indices]
+            elif camera_indices.nelement() > 0:
+                appe_embd = self.embedding_appearance(camera_indices).repeat(features.size()[0], 1)
             else:
                 appe_embd = self.embedding_appearance.mean(dim=0).repeat(features.size()[0], 1)
                 if not self.config.use_average_appearance_embedding:
                     appe_embd *= 0
-            network_inp = torch.cat([features.view(-1, features.shape[-1]), dirs_embd, appe_embd[ray_indices]] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
+            network_inp = torch.cat([features.view(-1, features.shape[-1]), dirs_embd, appe_embd] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
         else:
             network_inp = torch.cat([features.view(-1, features.shape[-1]), dirs_embd] + [arg.view(-1, arg.shape[-1]) for arg in args], dim=-1)
         color = self.network(network_inp).view(*features.shape[:-1], self.n_output_dims).float()
@@ -76,11 +72,14 @@ class VolumeColor(nn.Module):
         if self.config.use_appearance_embedding:
             if self.training:
                 appe_embd = self.embedding_appearance(camera_indices)
+                appe_embd = appe_embd[ray_indices]
+            elif camera_indices.nelement() > 0:
+                appe_embd = self.embedding_appearance(camera_indices).repeat(features.size()[0], 1)
             else:
                 appe_embd = self.embedding_appearance.mean(dim=0).repeat(features.size()[0], 1)
                 if not self.config.use_average_appearance_embedding:
                     appe_embd *= 0
-            network_inp = torch.cat([features.view(-1, features.shape[-1]), appe_embd[ray_indices]], dim=-1)
+            network_inp = torch.cat([features.view(-1, features.shape[-1]), appe_embd], dim=-1)
         else:
             network_inp = features.view(-1, features.shape[-1])
         color = self.network(network_inp).view(*features.shape[:-1], self.n_output_dims).float()
