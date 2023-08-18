@@ -84,6 +84,16 @@ The training procedure are by default followed by testing, which computes metric
 python launch.py --config path/to/your/exp/config/parsed.yaml --resume path/to/your/exp/ckpt/epoch=0-step=20000.ckpt --gpu 0 --test
 ```
 
+### Exporting
+You can run the script using the following command:
+```bash
+python export.py --exp_dir <experiment_directory> --output-dir <output_directory> [--gpu <gpu_id>] [--decimate <decimation_factor>]
+```
+Arguments
+* --exp_dir: This argument is required. It specifies the directory of the experiment from which the trained model will be loaded.
+* --output-dir: This argument is required. It specifies the directory where the exported mesh will be saved. The mesh will saved at `$output_dir/iso_mesh.ply` by default.
+* --gpu: This argument is optional. It specifies the GPU(s) to be used. If not provided, it defaults to '0'.
+* --decimate: This argument is optional. It specifies the desired final size of the mesh. If the number is less than 1, it represents the final size as a percentage of the initial size. If the number is greater than 1, it represents the desired number of faces.
 
 ## Benchmarks
 All experiments are conducted on a single NVIDIA RTX3090.
