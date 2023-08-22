@@ -8,7 +8,7 @@ dataset:
   cameras_file: cameras_sphere.npz
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
   n_test_traj_steps: 60
-  apply_mask: true
+  apply_mask: false
 
 model:
   name: neus
@@ -69,7 +69,7 @@ model:
       otype: VanillaMLP
       activation: ReLU
       output_activation: none
-      n_neurons: 256
+      n_neurons: 128
       n_hidden_layers: 4
     color_activation: sigmoid
 
@@ -123,7 +123,7 @@ export:
   export_vertex_color: True
 
 trainer:
-  max_steps: 5000000
+  max_steps: 500000
   log_every_n_steps: 100
   num_sanity_val_steps: 0
   val_check_interval: 5000
