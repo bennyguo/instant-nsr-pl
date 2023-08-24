@@ -12,7 +12,7 @@ dataset:
   n_test_traj_steps: 120
   apply_mask: false
   load_data_on_gpu: false
-  num_images: 379
+  max_imgs: 379
 
 model:
   name: neus
@@ -76,8 +76,8 @@ model:
       n_neurons: 64
       n_hidden_layers: 2
     color_activation: sigmoid
-    num_images: ${dataset.num_images}
-    use_appearance_embedding: true
+    max_imgs: ${dataset.max_imgs}
+    use_appearance_embedding: false
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 32
   # background model configurations
@@ -115,8 +115,8 @@ model:
       n_neurons: 64
       n_hidden_layers: 2
     color_activation: sigmoid
-    num_images: ${dataset.num_images}
-    use_appearance_embedding: true
+    max_imgs: ${dataset.max_imgs}
+    use_appearance_embedding: false
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 32
 

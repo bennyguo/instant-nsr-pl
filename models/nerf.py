@@ -58,7 +58,7 @@ class NeRFModel(BaseModel):
         mesh = self.geometry.isosurface()
         return mesh
 
-    def forward_(self, rays):
+    def forward_(self, rays, camera_indices):
         n_rays = rays.shape[0]
         rays_o, rays_d = rays[:, 0:3], rays[:, 3:6] # both (N_rays, 3)
 
@@ -100,7 +100,7 @@ class NeRFModel(BaseModel):
         intervals = t_ends - t_starts
 
         density, feature = self.geometry(positions) 
-        rgb = self.texture(feature, t_dirs)
+        rgb = self.texture(feature, t_dirs, camera_indices.to(self.rank), ray_indices)
 
         weights = render_weight_from_density(t_starts, t_ends, density[...,None], ray_indices=ray_indices, n_rays=n_rays)
         opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
@@ -126,11 +126,11 @@ class NeRFModel(BaseModel):
         
         return out
 
-    def forward(self, rays):
+    def forward(self, rays, camera_indices):
         if self.training:
-            out = self.forward_(rays)
+            out = self.forward_(rays, camera_indices)
         else:
-            out = chunk_batch(self.forward_, self.config.ray_chunk, True, rays)
+            out = chunk_batch(self.forward_, self.config.ray_chunk, True, rays, camera_indices)
         return {
             **out,
         }

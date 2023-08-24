@@ -18,7 +18,7 @@ class VolumeRadiance(nn.Module):
         self.n_input_dims = self.config.input_feature_dim + encoding.n_output_dims
         if self.config.use_appearance_embedding:
             self.n_input_dims += self.config.appearance_embedding_dim
-            self.embedding_appearance = Embedding(self.config.num_images, self.config.appearance_embedding_dim)
+            self.embedding_appearance = Embedding(self.config.max_imgs, self.config.appearance_embedding_dim)
         network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)    
         self.encoding = encoding
         self.network = network
@@ -28,11 +28,11 @@ class VolumeRadiance(nn.Module):
     def forward(self, features, dirs, camera_indices, ray_indices, *args):
         dirs = (dirs + 1.) / 2. # (-1, 1) => (0, 1)
         dirs_embd = self.encoding(dirs.view(-1, self.n_dir_dims))
-        # with appearance embeddings
+
+        # appearance embeddings
         if self.config.use_appearance_embedding:
             if self.training:
-                appe_embd = self.embedding_appearance(camera_indices)
-                appe_embd = appe_embd[ray_indices]
+                appe_embd = self.embedding_appearance(camera_indices[ray_indices])
             elif camera_indices.nelement() > 0:
                 appe_embd = self.embedding_appearance(camera_indices).repeat(features.size()[0], 1)
             else:
@@ -63,7 +63,7 @@ class VolumeColor(nn.Module):
         self.n_input_dims = self.config.input_feature_dim
         if self.config.use_appearance_embedding:
             self.n_input_dims += self.config.appearance_embedding_dim
-            self.embedding_appearance = Embedding(self.config.num_images, self.config.appearance_embedding_dim)
+            self.embedding_appearance = Embedding(self.config.max_imgs, self.config.appearance_embedding_dim)
         network = get_mlp(self.n_input_dims, self.n_output_dims, self.config.mlp_network_config)
         self.network = network
     
@@ -71,8 +71,7 @@ class VolumeColor(nn.Module):
         # with appearance embeddings
         if self.config.use_appearance_embedding:
             if self.training:
-                appe_embd = self.embedding_appearance(camera_indices)
-                appe_embd = appe_embd[ray_indices]
+                appe_embd = self.embedding_appearance(camera_indices[ray_indices])
             elif camera_indices.nelement() > 0:
                 appe_embd = self.embedding_appearance(camera_indices).repeat(features.size()[0], 1)
             else:

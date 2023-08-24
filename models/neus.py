@@ -196,7 +196,7 @@ class NeuSModel(BaseModel):
         intervals = t_ends - t_starts
 
         density, feature = self.geometry_bg(positions) 
-        rgb = self.texture_bg(feature, t_dirs, camera_indices, ray_indices)
+        rgb = self.texture_bg(feature, t_dirs, camera_indices.to(self.rank), ray_indices)
 
         weights = render_weight_from_density(t_starts, t_ends, density[...,None], ray_indices=ray_indices, n_rays=n_rays)
         opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
@@ -246,8 +246,9 @@ class NeuSModel(BaseModel):
         positions = t_origins + t_dirs * midpoints
         dists = t_ends - t_starts
 
+
         if self.config.geometry.grad_type == 'finite_difference':
-            sdf, sdf_grad, feature, sdf_laplace = self.geometry(positions, with_grad=True, with_feature=True, with_laplace=True)
+            sdf, sdf_grad, feature, sdf_laplace = self.geometry(positions, with_grad=True, with_feature=True, with_laplace=True, camera_indices=camera_indices, ray_indices=ray_indices)
         else:
             sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True)
         normal = F.normalize(sdf_grad, p=2, dim=-1)

@@ -155,7 +155,11 @@ class VolumeSDF(BaseImplicitGeometry):
         if self.grad_type == 'finite_difference':
             rank_zero_info(f"Using finite difference to compute gradients with eps={self.finite_difference_eps}")
 
-    def forward(self, points, with_grad=True, with_feature=True, with_laplace=False):
+        if self.config.use_distortion:
+            from field_components.temporal_distortions import DNeRFDistortion
+            self.distortion_field = DNeRFDistortion(spatial=self.config.unwarp_rays, num_classes=self.config.max_imgs)
+
+    def forward(self, points, with_grad=True, with_feature=True, with_laplace=False, camera_indices=None, ray_indices=None):
         with torch.inference_mode(torch.is_inference_mode_enabled() and not (with_grad and self.grad_type == 'analytic')):
             with torch.set_grad_enabled(self.training or (with_grad and self.grad_type == 'analytic')):
                 if with_grad and self.grad_type == 'analytic':
@@ -165,6 +169,17 @@ class VolumeSDF(BaseImplicitGeometry):
 
                 points_ = points # points in the original scale
                 points = contract_to_unisphere(points, self.radius, self.contraction_type) # points normalized to (0, 1)
+                # NOTE samples undistortion
+                if self.config.use_distortion and camera_indices is not None:
+                    if self.training:
+                        cam_all = camera_indices[ray_indices]
+                        if self.config.unwarp_rays:
+                            # non-temporal unwarp
+                            points_offset = self.distortion_field(points, cam_all.long())
+                        else:
+                            # normalize times as mentioned in nerfstudio
+                            points_offset = self.distortion_field(points, cam_all[:, None] / self.config.max_imgs) * 0.001 
+                        points = points + points_offset
                 
                 out = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims).float()
                 sdf, feature = out[...,0], out

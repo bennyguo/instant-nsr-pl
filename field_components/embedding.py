@@ -21,6 +21,7 @@ class Embedding(FieldComponent):
 
     def build_nn_modules(self) -> None:
         self.embedding = torch.nn.Embedding(self.in_dim, self.out_dim)
+        self.embedding.weight.data.fill_(0.)
 
     def mean(self, dim=0):
         """Return the mean of the embedding weights along a dim."""

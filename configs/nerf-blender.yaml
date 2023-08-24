@@ -15,6 +15,7 @@ dataset:
   train_split: "train"
   val_split: "val"
   test_split: "test"
+  max_imgs: 100
 
 model:
   name: nerf
@@ -53,6 +54,9 @@ model:
       output_activation: none
       n_neurons: 64
       n_hidden_layers: 1
+    max_imgs: ${dataset.max_imgs}
+    use_distortion: false
+    unwarp_rays: true
   texture:
     name: volume-radiance
     input_feature_dim: ${model.geometry.feature_dim}
@@ -65,6 +69,9 @@ model:
       output_activation: Sigmoid
       n_neurons: 64
       n_hidden_layers: 2
+    use_appearance_embedding: false
+    use_average_appearance_embedding: ture
+    appearance_embedding_dim: 32
 
 system:
   name: nerf-system
