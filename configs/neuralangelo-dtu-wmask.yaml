@@ -17,7 +17,7 @@ model:
   num_samples_per_ray: 1024
   train_num_rays: 512
   max_train_num_rays: 2048
-  grid_prune: false
+  grid_prune: false # it seems to be not helpful for scenes with masks, e.g. dtu
   grid_prune_occ_thre: 0.001
   dynamic_ray_sampling: true
   batch_image_sampling: true
