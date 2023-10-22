@@ -14,3 +14,9 @@ def make(name, config):
 
 
 from . import blender, colmap, dtu
+try:
+    # customized data
+    import R3DParser
+    from . import hmvs
+except ImportError:
+    pass

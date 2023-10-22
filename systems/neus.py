@@ -12,6 +12,7 @@ from models.ray_utils import get_rays
 import systems
 from systems.base import BaseSystem
 from systems.criterions import PSNR, binary_cross_entropy
+import numpy as np
 
 
 @systems.register('neus-system')
@@ -48,18 +49,18 @@ class NeuSSystem(BaseSystem):
                 0, self.dataset.h, size=(self.train_num_rays,), device=self.dataset.all_images.device
             )
             if self.dataset.directions.ndim == 3: # (H, W, 3)
-                directions = self.dataset.directions[y, x]
+                directions = self.dataset.directions[y, x].to(self.rank)
             elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
-                directions = self.dataset.directions[index, y, x]
+                directions = self.dataset.directions[index, y, x].to(self.rank)
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index, y, x].view(-1, self.dataset.all_images.shape[-1]).to(self.rank)
             fg_mask = self.dataset.all_fg_masks[index, y, x].view(-1).to(self.rank)
         else:
             c2w = self.dataset.all_c2w[index][0]
             if self.dataset.directions.ndim == 3: # (H, W, 3)
-                directions = self.dataset.directions
+                directions = self.dataset.directions.to(self.rank)
             elif self.dataset.directions.ndim == 4: # (N, H, W, 3)
-                directions = self.dataset.directions[index][0] 
+                directions = self.dataset.directions[index][0].to(self.rank)
             rays_o, rays_d = get_rays(directions, c2w)
             rgb = self.dataset.all_images[index].view(-1, self.dataset.all_images.shape[-1]).to(self.rank)
             fg_mask = self.dataset.all_fg_masks[index].view(-1).to(self.rank)
@@ -104,7 +105,13 @@ class NeuSSystem(BaseSystem):
         self.log('train/loss_rgb', loss_rgb_l1)
         loss += loss_rgb_l1 * self.C(self.config.system.loss.lambda_rgb_l1)        
 
-        loss_eikonal = ((torch.linalg.norm(out['sdf_grad_samples'], ord=2, dim=-1) - 1.)**2).mean()
+        if self.C(self.config.system.loss.lambda_adaptive) > 0.0 and self.C(self.config.system.loss.lambda_adaptive) < 1.0:
+            with torch.no_grad():
+                weights_eikonal = (self.C(self.config.system.loss.lambda_adaptive) / (torch.mean((out['comp_rgb_full'] - batch['rgb']) ** 2, dim=1) + self.C(self.config.system.loss.lambda_adaptive)))
+                weights_eikonal = weights_eikonal[out['ray_indices']]
+        else:
+            weights_eikonal = 1.0
+        loss_eikonal = ((torch.linalg.norm(out['sdf_grad_samples'], ord=2, dim=-1) - 1.)**2 * weights_eikonal).mean()
         self.log('train/loss_eikonal', loss_eikonal)
         loss += loss_eikonal * self.C(self.config.system.loss.lambda_eikonal)
         
@@ -121,20 +128,31 @@ class NeuSSystem(BaseSystem):
         self.log('train/loss_sparsity', loss_sparsity)
         loss += loss_sparsity * self.C(self.config.system.loss.lambda_sparsity)
 
+        if self.C(self.config.system.loss.lambda_surface_bias) > 0:
+            loss_bias = F.l1_loss(out['sdf_rendered'], torch.zeros_like(out['sdf_rendered']), reduction='mean')
+            loss += loss_bias * self.C(self.config.system.loss.lambda_surface_bias) 
         if self.C(self.config.system.loss.lambda_curvature) > 0:
             assert 'sdf_laplace_samples' in out, "Need geometry.grad_type='finite_difference' to get SDF Laplace samples"
             loss_curvature = out['sdf_laplace_samples'].abs().mean()
             self.log('train/loss_curvature', loss_curvature)
-            loss += loss_curvature * self.C(self.config.system.loss.lambda_curvature)
+            if self.global_step < self.config.system.loss.curvature_warmup_steps:
+                curv_warmup_factor = (self.global_step+1)  / self.config.system.loss.curvature_warmup_steps
+                loss += loss_curvature * self.C(self.config.system.loss.lambda_curvature) * curv_warmup_factor
+            else:
+                # decay the weight of curv loss
+                growth_ratio = self.config.model.geometry.xyz_encoding_config.per_level_scale
+                growth_steps = self.config.model.geometry.xyz_encoding_config.update_steps
+                curvature_weight = np.exp(-max(self.global_step - self.config.system.loss.curvature_warmup_steps,0) * np.log(growth_ratio) / growth_steps) * self.C(self.config.system.loss.lambda_curvature)
+                loss += loss_curvature * curvature_weight
 
         # distortion loss proposed in MipNeRF360
         # an efficient implementation from https://github.com/sunset1995/torch_efficient_distloss
-        if self.C(self.config.system.loss.lambda_distortion) > 0:
+        if self.C(self.config.system.loss.lambda_distortion) > 0 and out['ray_indices'].nelement() > 0:
             loss_distortion = flatten_eff_distloss(out['weights'], out['points'], out['intervals'], out['ray_indices'])
             self.log('train/loss_distortion', loss_distortion)
             loss += loss_distortion * self.C(self.config.system.loss.lambda_distortion)    
 
-        if self.config.model.learned_background and self.C(self.config.system.loss.lambda_distortion_bg) > 0:
+        if self.config.model.learned_background and self.C(self.config.system.loss.lambda_distortion_bg) > 0 and out['ray_indices_bg'][0].nelement() > 0:
             loss_distortion_bg = flatten_eff_distloss(out['weights_bg'], out['points_bg'], out['intervals_bg'], out['ray_indices_bg'])
             self.log('train/loss_distortion_bg', loss_distortion_bg)
             loss += loss_distortion_bg * self.C(self.config.system.loss.lambda_distortion_bg)        
@@ -256,6 +274,7 @@ class NeuSSystem(BaseSystem):
             psnr = torch.mean(torch.stack([o['psnr'] for o in out_set.values()]))
             self.log('test/psnr', psnr, prog_bar=True, rank_zero_only=True)    
 
+            """
             self.save_img_sequence(
                 f"it{self.global_step}-test",
                 f"it{self.global_step}-test",
@@ -263,6 +282,7 @@ class NeuSSystem(BaseSystem):
                 save_format='mp4',
                 fps=30
             )
+            """
             
             self.export()
     
@@ -272,3 +292,17 @@ class NeuSSystem(BaseSystem):
             f"it{self.global_step}-{self.config.model.geometry.isosurface.method}{self.config.model.geometry.isosurface.resolution}.obj",
             **mesh
         )        
+        try:
+            self.dataset.transform_s
+            # export with original pose
+            vertices = np.asarray(mesh['v_pos'])
+            vertices *= self.dataset.transform_s
+            vertices -= torch.squeeze(self.dataset.transform_t).repeat(vertices.shape[0], 1).numpy()
+            vertices = np.transpose(torch.inverse(self.dataset.transform_R).numpy() @ np.transpose(vertices))
+            mesh['v_pos'] = torch.tensor(vertices)
+            self.save_mesh(
+                f"it{self.global_step}-{self.config.model.geometry.isosurface.method}{self.config.model.geometry.isosurface.resolution}-ori.obj",
+                **mesh
+            )
+        except:
+            print("Model is already saved in original scale.")

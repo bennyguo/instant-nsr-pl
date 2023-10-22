@@ -1,11 +1,11 @@
-name: neus-colmap-${basename:${dataset.root_dir}}
+name: na-colmap-${basename:${dataset.root_dir}}
 tag: ""
 seed: 42
 
 dataset:
   name: colmap
-  root_dir: ./load/unbounded360/garden
-  img_downscale: 2 # 4 # better with more than 1000 x 1000 resolution
+  root_dir: /home/yidaw/Documents/buildboat/nerf2mesh/data/
+  img_downscale: 2 # better with more than 1000 x 1000 resolution
   cam_downscale: 2.5 # if false, to rescale the cameras/pts positions automatically
   up_est_method: ground # z-axis # if true, use estimated ground plane normal direction as up direction
   center_est_method: point # camera
@@ -19,7 +19,7 @@ model:
   radius: 1.0
   num_samples_per_ray: 4096 # fewer than 1024 fails to learn SDF, although rendering is fine
   train_num_rays: 512
-  max_train_num_rays: 8192
+  max_train_num_rays: 4096
   grid_prune: true
   grid_prune_occ_thre: 0.001
   dynamic_ray_sampling: true
@@ -38,7 +38,7 @@ model:
     feature_dim: 13
     sdf2weight: neus
     geometric_bias_remove: false # refer to D-NeuS
-    grad_type: analytic
+    grad_type: finite_difference
     isosurface:
       method: mc
       resolution: 768
@@ -47,14 +47,14 @@ model:
     xyz_encoding_config:
       otype: ProgressiveBandHashGrid
       n_levels: 16
-      n_features_per_level: 2
-      log2_hashmap_size: 19
+      n_features_per_level: 8
+      log2_hashmap_size: 22
       base_resolution: 32
       per_level_scale: 1.3195079107728942
       include_xyz: true
       start_level: 4
       start_step: 0
-      update_steps: 1000
+      update_steps: 5000
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -64,6 +64,7 @@ model:
       sphere_init: true
       sphere_init_radius: 0.5
       weight_norm: true
+    finite_difference_eps: progressive
     max_imgs: ${dataset.max_imgs}
     use_distortion: false
     unwarp_rays: true
@@ -81,7 +82,7 @@ model:
       n_hidden_layers: 2
     color_activation: sigmoid
     max_imgs: ${dataset.max_imgs}
-    use_appearance_embedding: false 
+    use_appearance_embedding: false
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 16
   # background model configurations
@@ -122,17 +123,18 @@ model:
     max_imgs: ${dataset.max_imgs}
     use_appearance_embedding: false
     use_average_appearance_embedding: ture
-    appearance_embedding_dim: 8
+    appearance_embedding_dim: 8 
 
 system:
   name: neus-system
   loss:
-    lambda_rgb_mse: 10.
-    lambda_rgb_l1: 0.
+    lambda_rgb_mse: 1.
+    lambda_rgb_l1: 1.
     lambda_mask: 0.0
-    lambda_eikonal: 0.1
-    lambda_adaptive: 1e-2 # 1e-3
-    lambda_curvature: 0
+    lambda_eikonal: 0.1 # [0, 0.01, 0.1, 2e5] 
+    lambda_adaptive: 0.0 # 1e-3
+    lambda_curvature: 5e-4 # topology warmup
+    curvature_warmup_steps: 5000
     lambda_sparsity: 0.0
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
@@ -187,6 +189,6 @@ trainer:
   num_sanity_val_steps: 0
   val_check_interval: 1e5
   limit_train_batches: 1.0
-  limit_val_batches: 4
+  limit_val_batches: 2
   enable_progress_bar: true
   precision: 16

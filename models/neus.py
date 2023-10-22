@@ -196,7 +196,7 @@ class NeuSModel(BaseModel):
         intervals = t_ends - t_starts
 
         density, feature = self.geometry_bg(positions) 
-        rgb = self.texture_bg(feature, t_dirs, camera_indices, ray_indices)
+        rgb = self.texture_bg(feature, t_dirs, camera_indices.to(self.rank), ray_indices)
 
         weights = render_weight_from_density(t_starts, t_ends, density[...,None], ray_indices=ray_indices, n_rays=n_rays)
         opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
@@ -246,8 +246,9 @@ class NeuSModel(BaseModel):
         positions = t_origins + t_dirs * midpoints
         dists = t_ends - t_starts
 
+
         if self.config.geometry.grad_type == 'finite_difference':
-            sdf, sdf_grad, feature, sdf_laplace = self.geometry(positions, with_grad=True, with_feature=True, with_laplace=True)
+            sdf, sdf_grad, feature, sdf_laplace = self.geometry(positions, with_grad=True, with_feature=True, with_laplace=True, camera_indices=camera_indices, ray_indices=ray_indices)
         else:
             sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True)
         normal = F.normalize(sdf_grad, p=2, dim=-1)
@@ -255,6 +256,12 @@ class NeuSModel(BaseModel):
         rgb = self.texture(feature, t_dirs, camera_indices.to(self.rank), ray_indices, normal)
 
         weights = render_weight_from_alpha(alpha, ray_indices=ray_indices, n_rays=n_rays)
+        # rendered points in D-NeuS
+        if self.config.geometry.geometric_bias_remove and len(torch.unique(ray_indices)) > 0:
+            positions_render = torch.stack([rays_o[i] + rays_d[i] * torch.sum(midpoints[ray_indices == i] * weights[ray_indices == i] / torch.sum(weights[ray_indices == i])) for i in torch.unique(ray_indices)])
+            sdf_rendered = self.geometry(positions_render, with_grad=False, with_feature=False)
+        else:
+            sdf_rendered = torch.Tensor([0.])
         opacity = accumulate_along_rays(weights, ray_indices, values=None, n_rays=n_rays)
         depth = accumulate_along_rays(weights, ray_indices, values=midpoints, n_rays=n_rays)
         comp_rgb = accumulate_along_rays(weights, ray_indices, values=rgb, n_rays=n_rays)
@@ -279,11 +286,15 @@ class NeuSModel(BaseModel):
                 'alpha': alpha.view(-1),
                 'points': midpoints.view(-1),
                 'intervals': dists.view(-1),
-                'ray_indices': ray_indices.view(-1)                
+                'ray_indices': ray_indices.view(-1)
             })
             if self.config.geometry.grad_type == 'finite_difference':
                 out.update({
                     'sdf_laplace_samples': sdf_laplace
+                })
+            if self.config.geometry.geometric_bias_remove:
+                out.update({
+                    'sdf_rendered': sdf_rendered
                 })
 
         if self.config.learned_background:
