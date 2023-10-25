@@ -34,6 +34,7 @@ model:
     feature_dim: 13
     grad_type: analytic
     sdf2weight: neus
+    geometric_bias_remove: false # refer to D-NeuS
     isosurface:
       method: mc
       resolution: 512
@@ -82,13 +83,15 @@ system:
     lambda_rgb_l1: 1.
     lambda_mask: 0.1 # 0.0
     lambda_eikonal: 1e-3 # 0.1
+    lambda_adaptive: 0.0 # 1e-3
     lambda_curvature: 0.
     lambda_sparsity: 0.0
+    sparsity_scale: 1.
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
     lambda_opaque: 1e-2 # 0.0
     lambda_entropy: 0.0
-    sparsity_scale: 1.
+    lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 2e5] # refer to D-NeuS
   optimizer:
     name: AdamW
     args:

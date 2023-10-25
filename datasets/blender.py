@@ -45,11 +45,25 @@ class BlenderDatasetBase():
 
         self.near, self.far = self.config.near_plane, self.config.far_plane
 
-        self.focal = 0.5 * w / math.tan(0.5 * meta['camera_angle_x']) # scaled focal length
+        try:
+            self.focal_x = meta['fl_x']
+            self.focal_y = meta['fl_y']
+            self.cx = meta['cx']
+            self.cy = meta['cy']
+            self.k1 = meta['k1']
+            self.k2 = meta['k2']
+            use_c3vd = True
+        except:
+            self.focal = 0.5 * w / math.tan(0.5 * meta['camera_angle_x']) # scaled focal length
+            use_c3vd = False
 
-        # ray directions for all pixels, same for all images (same H, W, focal)
-        self.directions = \
-            get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2).to(self.rank) # (h, w, 3)           
+        if use_c3vd:
+            # ray directions for all pixels, same for all images (same H, W, focal)
+            self.directions = \
+                get_ray_directions(self.w, self.h, self.focal_x, self.focal_y, self.cx, self.cy, k1=self.k1, k2=self.k2).to(self.rank) # (h, w, 3)           
+        else:
+            self.directions = \
+                get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2).to(self.rank) # (h, w, 3)           
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 
@@ -69,6 +83,18 @@ class BlenderDatasetBase():
             torch.stack(self.all_c2w, dim=0).float().to(self.rank), \
             torch.stack(self.all_images, dim=0).float().to(self.rank), \
             torch.stack(self.all_fg_masks, dim=0).float().to(self.rank)
+            # NOTE: translate
+        self.all_c2w[:,:,3] -= torch.mean(self.all_c2w[:,:,3])
+        # rescaling
+        if 'cam_downscale' not in self.config:
+            scale = 1.0
+        elif self.config.cam_downscale:
+            scale = self.config.cam_downscale
+        else:
+            # auto-scale with camera positions
+            scale = self.all_c2w[...,3].norm(p=2, dim=-1).min()
+            print('auto-scaled by: ', scale)
+        self.all_c2w[...,3] /= scale
         
 
 class BlenderDataset(Dataset, BlenderDatasetBase):

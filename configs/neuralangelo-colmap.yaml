@@ -132,14 +132,14 @@ system:
     lambda_rgb_l1: 1.
     lambda_mask: 0.0
     lambda_eikonal: 0.1 # [0, 0.01, 0.1, 2e5] 
-    lambda_adaptive: 0.0 # 1e-3
+    lambda_adaptive: 0.0
     lambda_curvature: 5e-4 # topology warmup
     curvature_warmup_steps: 5000
     lambda_sparsity: 0.0
+    sparsity_scale: 1.
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
     lambda_opaque: 0.0
-    sparsity_scale: 1.
     lambda_entropy: 0.0
     lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 2e5] # refer to D-NeuS
   optimizer:

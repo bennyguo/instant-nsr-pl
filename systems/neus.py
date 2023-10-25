@@ -107,8 +107,9 @@ class NeuSSystem(BaseSystem):
 
         if self.C(self.config.system.loss.lambda_adaptive) > 0.0 and self.C(self.config.system.loss.lambda_adaptive) < 1.0:
             with torch.no_grad():
-                weights_eikonal = (self.C(self.config.system.loss.lambda_adaptive) / (torch.mean((out['comp_rgb_full'] - batch['rgb']) ** 2, dim=1) + self.C(self.config.system.loss.lambda_adaptive)))
-                weights_eikonal = weights_eikonal[out['ray_indices']]
+                rgb_mse = torch.mean((out['comp_rgb_full'] - batch['rgb']) ** 2, dim=1)
+            weights_eikonal = self.C(self.config.system.loss.lambda_adaptive) / (rgb_mse + self.C(self.config.system.loss.lambda_adaptive))
+            weights_eikonal = weights_eikonal[out['ray_indices']]
         else:
             weights_eikonal = 1.0
         loss_eikonal = ((torch.linalg.norm(out['sdf_grad_samples'], ord=2, dim=-1) - 1.)**2 * weights_eikonal).mean()
