@@ -81,15 +81,15 @@ system:
   loss:
     lambda_rgb_mse: 0.
     lambda_rgb_l1: 1.
-    lambda_mask: 0.1 # 0.0
-    lambda_eikonal: 1e-3 # 0.1
-    lambda_adaptive: 0.0 # 1e-3
+    lambda_mask: 0.1
+    lambda_eikonal: 0.1
+    lambda_adaptive: 1e-3
     lambda_curvature: 0.
     lambda_sparsity: 0.0
     sparsity_scale: 1.
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
-    lambda_opaque: 1e-2 # 0.0
+    lambda_opaque: 1e-2
     lambda_entropy: 0.0
     lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 2e5] # refer to D-NeuS
   optimizer:

@@ -83,9 +83,11 @@ class BlenderDatasetBase():
             torch.stack(self.all_c2w, dim=0).float().to(self.rank), \
             torch.stack(self.all_images, dim=0).float().to(self.rank), \
             torch.stack(self.all_fg_masks, dim=0).float().to(self.rank)
-            # NOTE: translate
-        self.all_c2w[:,:,3] -= torch.mean(self.all_c2w[:,:,3])
-        # rescaling
+
+        # translate
+        # self.all_c2w[...,3] -= self.all_c2w[...,3].mean(0)
+
+        # rescale
         if 'cam_downscale' not in self.config:
             scale = 1.0
         elif self.config.cam_downscale:

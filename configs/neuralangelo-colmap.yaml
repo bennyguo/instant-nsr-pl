@@ -132,7 +132,7 @@ system:
     lambda_rgb_l1: 1.
     lambda_mask: 0.0
     lambda_eikonal: 0.1 # [0, 0.01, 0.1, 2e5] 
-    lambda_adaptive: 0.0
+    lambda_adaptive: 1e-4
     lambda_curvature: 5e-4 # topology warmup
     curvature_warmup_steps: 5000
     lambda_sparsity: 0.0

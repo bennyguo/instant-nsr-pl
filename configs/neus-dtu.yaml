@@ -112,13 +112,14 @@ system:
     lambda_rgb_l1: 1.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
+    lambda_adaptive: 1e-3
     lambda_curvature: 0.
     lambda_sparsity: 0.0
+    sparsity_scale: 1.
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
     lambda_opaque: 0.0
     lambda_entropy: 0.0
-    sparsity_scale: 1.
   optimizer:
     name: AdamW
     args:

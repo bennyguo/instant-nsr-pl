@@ -131,7 +131,7 @@ system:
     lambda_rgb_l1: 0.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
-    lambda_adaptive: 1e-3 # 0.0
+    lambda_adaptive: 1e-4
     lambda_curvature: 0
     lambda_sparsity: 0.0
     lambda_distortion: 0.0
