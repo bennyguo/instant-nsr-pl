@@ -69,6 +69,8 @@ class BlenderDatasetBase():
 
         for i, frame in enumerate(meta['frames']):
             c2w = torch.from_numpy(np.array(frame['transform_matrix'])[:3, :4])
+            if use_c3vd:
+                c2w[:3,1:3] *= -1. # OpenGL or COLMAP coordinates
             self.all_c2w.append(c2w)
 
             img_path = os.path.join(self.config.root_dir, f"{frame['file_path']}.png")
