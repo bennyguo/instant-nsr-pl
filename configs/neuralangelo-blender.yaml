@@ -13,6 +13,7 @@ dataset:
   cam_downscale: false
   near_plane: 2.0
   far_plane: 6.0
+  apply_mask: false
   train_split: 'train'
   val_split: 'val'
   test_split: 'test'
@@ -21,7 +22,7 @@ dataset:
 model:
   name: neus
   radius: 1.5
-  num_samples_per_ray: 4096 # 1024
+  num_samples_per_ray: 4096
   train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true

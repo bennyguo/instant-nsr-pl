@@ -16,7 +16,7 @@ def get_ray_directions(W, H, fx, fy, cx, cy, use_pixel_centers=True, k1=0, k2=0,
     i, j = torch.from_numpy(i), torch.from_numpy(j)
 
     r2 = torch.atan(torch.sqrt((i - cx)**2 + (j - cy)**2))**2
-    distort = 1 + k1 * r2 + k2 * r2**2 + k3 * r2**3
+    distort = 1.0 + k1 * r2 + k2 * r2**2 + k3 * r2**3
     directions = torch.stack([(i - cx) * distort / fx, -(j - cy) * distort / fy, -torch.ones_like(i)], -1) # (H, W, 3)
 
     return directions

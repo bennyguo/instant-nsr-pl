@@ -22,7 +22,7 @@ class BlenderDatasetBase():
         self.rank = get_rank()
 
         self.has_mask = True
-        self.apply_mask = True
+        self.apply_mask = self.has_mask and self.config.apply_mask
 
         with open(os.path.join(self.config.root_dir, f"transforms_{self.split}.json"), 'r') as f:
             meta = json.load(f)
@@ -54,16 +54,17 @@ class BlenderDatasetBase():
             self.k2 = meta['k2']
             use_c3vd = True
         except:
-            self.focal = 0.5 * w / math.tan(0.5 * meta['camera_angle_x']) # scaled focal length
+            self.focal_x = 0.5 * w / math.tan(0.5 * meta['camera_angle_x']) # scaled focal length
+            self.focal_y = self.focal_x
+            self.cx = self.w//2
+            self.cy = self.h//2
+            self.k1 = 0.0
+            self.k2 = 0.0
             use_c3vd = False
 
-        if use_c3vd:
-            # ray directions for all pixels, same for all images (same H, W, focal)
-            self.directions = \
-                get_ray_directions(self.w, self.h, self.focal_x, self.focal_y, self.cx, self.cy, k1=self.k1, k2=self.k2).to(self.rank) # (h, w, 3)           
-        else:
-            self.directions = \
-                get_ray_directions(self.w, self.h, self.focal, self.focal, self.w//2, self.h//2).to(self.rank) # (h, w, 3)           
+        # ray directions for all pixels, same for all images (same H, W, focal)
+        self.directions = \
+            get_ray_directions(self.w, self.h, self.focal_x, self.focal_y, self.cx, self.cy, k1=self.k1, k2=self.k2).to(self.rank) # (h, w, 3)           
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 
@@ -78,7 +79,7 @@ class BlenderDatasetBase():
             img = img.resize(self.img_wh, Image.BICUBIC)
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
 
-            if use_c3vd:
+            if use_c3vd and self.apply_mask:
                 depth_path = img_path.replace("images", "depths").replace("color.png", "depth.tiff")
                 depth = Image.open(depth_path).convert('L')
                 depth = depth.resize(self.img_wh, Image.BICUBIC)
@@ -87,7 +88,7 @@ class BlenderDatasetBase():
                 mask[depth[...,0] == 0] = 0.0
                 self.all_fg_masks.append(mask) # (h, w)
             else:
-                self.all_fg_masks.append(img[..., -1]) # (h, w)
+                self.all_fg_masks.append(torch.ones_like(img[...,0], device=img.device)) # (h, w)
             self.all_images.append(img[...,:3])
 
         self.all_c2w, self.all_images, self.all_fg_masks = \

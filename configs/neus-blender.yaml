@@ -13,6 +13,7 @@ dataset:
   cam_downscale: false
   near_plane: 2.0
   far_plane: 6.0
+  apply_mask: false
   train_split: 'train'
   val_split: 'val'
   test_split: 'test'
