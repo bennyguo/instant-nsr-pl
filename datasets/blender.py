@@ -79,7 +79,13 @@ class BlenderDatasetBase():
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
 
             if use_c3vd:
-                self.all_fg_masks.append(torch.ones_like(img[...,0], device=img.device)) # (h, w)
+                depth_path = img_path.replace("images", "depths").replace("color.png", "depth.tiff")
+                depth = Image.open(depth_path).convert('L')
+                depth = depth.resize(self.img_wh, Image.BICUBIC)
+                depth = TF.to_tensor(depth).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
+                mask = torch.ones_like(img[...,0], device=img.device)
+                mask[depth[...,0] == 0] = 0.0
+                self.all_fg_masks.append(mask) # (h, w)
             else:
                 self.all_fg_masks.append(img[..., -1]) # (h, w)
             self.all_images.append(img[...,:3])
