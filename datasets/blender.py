@@ -78,7 +78,10 @@ class BlenderDatasetBase():
             img = img.resize(self.img_wh, Image.BICUBIC)
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
 
-            self.all_fg_masks.append(img[..., -1]) # (h, w)
+            if use_c3vd:
+                self.all_fg_masks.append(torch.ones_like(img[...,0], device=img.device)) # (h, w)
+            else:
+                self.all_fg_masks.append(img[..., -1]) # (h, w)
             self.all_images.append(img[...,:3])
 
         self.all_c2w, self.all_images, self.all_fg_masks = \
