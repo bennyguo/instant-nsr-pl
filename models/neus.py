@@ -49,7 +49,6 @@ class NeuSModel(BaseModel):
         self.geometry = models.make(self.config.geometry.name, self.config.geometry)
         self.texture = models.make(self.config.texture.name, self.config.texture)
         self.geometry.contraction_type = ContractionType.AABB
-
         if self.config.learned_background:
             self.geometry_bg = models.make(self.config.geometry_bg.name, self.config.geometry_bg)
             self.texture_bg = models.make(self.config.texture_bg.name, self.config.texture_bg)
@@ -57,9 +56,9 @@ class NeuSModel(BaseModel):
             self.near_plane_bg, self.far_plane_bg = 0.1, 1e3
             self.cone_angle_bg = 10**(math.log10(self.far_plane_bg) / self.config.num_samples_per_ray_bg) - 1.
             self.render_step_size_bg = 0.01            
-
         self.variance = VarianceNetwork(self.config.variance)
         self.register_buffer('scene_aabb', torch.as_tensor([-self.config.radius, -self.config.radius, -self.config.radius, self.config.radius, self.config.radius, self.config.radius], dtype=torch.float32))
+        self.register_buffer("cos_anneal_ratio",torch.tensor(1.0).to(self.scene_aabb)) # this make sure it will be saved after training, if not, when testing, this hyperparameter will be set to zero.
         if self.config.grid_prune:
             self.occupancy_grid = OccupancyGrid(
                 roi_aabb=self.scene_aabb,
@@ -85,8 +84,7 @@ class NeuSModel(BaseModel):
         update_module_step(self.variance, epoch, global_step)
 
         cos_anneal_end = self.config.get('cos_anneal_end', 0)
-        self.cos_anneal_ratio = 1.0 if cos_anneal_end == 0 else min(1.0, global_step / cos_anneal_end)
-
+        self.cos_anneal_ratio = torch.tensor(1.0) if cos_anneal_end == 0 else torch.tensor( min(1.0, global_step / cos_anneal_end)).to(self.scene_aabb)
         def occ_eval_fn(x):
             sdf = self.geometry(x, with_grad=False, with_feature=False)
             inv_s = self.variance(torch.zeros([1, 3]))[:, :1].clip(1e-6, 1e6)
