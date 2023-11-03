@@ -13,7 +13,7 @@ dataset:
   cam_downscale: false
   near_plane: 2.0
   far_plane: 6.0
-  apply_mask: false
+  apply_mask: true
   train_split: 'train'
   val_split: 'val'
   test_split: 'test'
@@ -82,6 +82,7 @@ model:
       n_neurons: 64
       n_hidden_layers: 2
     color_activation: sigmoid
+    max_imgs: ${dataset.max_imgs}
     use_appearance_embedding: false
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 32
@@ -96,7 +97,7 @@ system:
     lambda_adaptive: 1e-4
     lambda_curvature: 0
     lambda_sparsity: 0.01
-    lambda_distortion: 0.
+    lambda_distortion: 1e-3 # 0.
     lambda_entropy: 0.01
     lambda_opaque: 0.
     sparsity_scale: 1.
@@ -144,6 +145,6 @@ trainer:
   num_sanity_val_steps: 0
   val_check_interval: 5e3 # 2000
   limit_train_batches: 1.0
-  limit_val_batches: 2
+  limit_val_batches: 4
   enable_progress_bar: true 
   precision: 16

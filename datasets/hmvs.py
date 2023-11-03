@@ -55,11 +55,13 @@ def bin2camera(bin_file, work_space=None):
 # get center
 def get_center(pts):
     center = pts.mean(0)
+    """
     dis = (pts - center[None,:]).norm(p=2, dim=-1)
     mean, std = dis.mean(), dis.std()
     q25, q75 = torch.quantile(dis, 0.25), torch.quantile(dis, 0.75)
     valid = (dis > mean - 1.5 * std) & (dis < mean + 1.5 * std) & (dis > mean - (q75 - q25) * 1.5) & (dis < mean + (q75 - q25) * 1.5)
     center = pts[valid].mean(0)
+    """
     return center
 
 # get rotation
@@ -227,9 +229,8 @@ class ColmapDatasetBase():
         self.rank = get_rank()
 
         if not ColmapDatasetBase.initialized:
-            all_c2w, intrinsics, fns = bin2camera(os.path.join(self.config.root_dir, self.config.pose_path), './exp')
-
-
+            assert os.path.isfile(self.config.pose_path)
+            all_c2w, intrinsics, fns = bin2camera(self.config.pose_path, self.config.root_dir)
             mask_ori_dir = os.path.join(self.config.root_dir, 'ParserOut/Mask')
             has_mask = os.path.exists(mask_ori_dir) # TODO: support partial masks
             apply_mask = has_mask and self.config.apply_mask
@@ -279,7 +280,7 @@ class ColmapDatasetBase():
                         if not os.path.exists(mask_path):
                             os.makedirs(os.path.join(self.config.root_dir, f"ParserOut/Mask_{self.config.img_downscale}"), exist_ok=True)
                             mask_path = os.path.join(mask_ori_dir, fns[i].split("/")[-1][:-3] + 'png')
-                        mask = Image.open(mask_path) # .convert('L') # (H, W, 1)
+                        mask = Image.open(mask_path).convert('L') # (H, W, 1)
                         if mask.size[0] != w or mask.size[1] != h:
                             mask = mask.resize(img_wh, Image.BICUBIC)
                             mask.save(os.path.join(self.config.root_dir, f"ParserOut/Mask_{self.config.img_downscale}", fns[i].split("/")[-1][:-3] + 'png'))
@@ -298,16 +299,17 @@ class ColmapDatasetBase():
             directions = torch.stack(directions, dim=0)
             all_c2w = torch.tensor(all_c2w)[:,:3]
             all_c2w[:,:,1:3] *= -1. # COLMAP => OpenGL
-            if self.config.pc_path is not None:
+            if self.config.pcd_path is not None:
+                assert os.path.isfile(self.config.pcd_path)
                 import open3d as o3d
-                pts3d = np.asarray(o3d.io.read_point_cloud(os.path.join(self.config.root_dir, self.config.pc_path)).points)
+                pts3d = np.asarray(o3d.io.read_point_cloud(self.config.pcd_path).points)
                 pts3d = torch.from_numpy(pts3d).float()
             else:
                 print(colored('sparse point cloud not given', 'red'))
                 pts3d = []
             if self.config.repose:
                 if self.config.center_est_method == 'point':
-                    print(colored('scene centered on '+os.path.join(self.config.root_dir, self.config.pc_path), 'blue'))
+                    print(colored('scene centered on '+os.path.join(self.config.root_dir, self.config.pcd_path), 'blue'))
                 all_c2w, pts3d, R, t, scale = normalize_poses(all_c2w, pts3d, up_est_method=self.config.up_est_method, center_est_method=self.config.center_est_method, cam_downscale=self.config.cam_downscale)
                 if self.split == 'test' and self.config.mesh_exported_path:
                     import open3d as o3d
@@ -321,7 +323,7 @@ class ColmapDatasetBase():
                     mesh.vertices = o3d.utility.Vector3dVector(vertices)
                     o3d.io.write_triangle_mesh(self.config.mesh_exported_path.replace(".obj", "-ori.obj"), mesh, write_triangle_uvs=True)
             else:
-                print(colored('scene centered on '+os.path.join(self.config.root_dir, self.config.pc_path), 'blue'))
+                print(colored('scene centered on '+os.path.join(self.config.root_dir, self.config.pcd_path), 'blue'))
                 poses_min, poses_max = all_c2w[...,3].min(0)[0], all_c2w[...,3].max(0)[0]
                 pts_fg = pts3d[(poses_min[0] < pts3d[:,0]) & (pts3d[:,0] < poses_max[0]) & (poses_min[1] < pts3d[:,1]) & (pts3d[:,1] < poses_max[1])]
                 print(colored(get_center(pts3d), 'blue'))

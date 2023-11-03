@@ -1,4 +1,4 @@
-name: ours-blender-${dataset.scene}
+name: na-blender-${dataset.scene}
 tag: ''
 seed: 42
 
@@ -22,9 +22,9 @@ dataset:
 model:
   name: neus
   radius: 1.5
-  num_samples_per_ray: 4096
+  num_samples_per_ray: 1024 # 2048
   train_num_rays: 256
-  max_train_num_rays: 8192
+  max_train_num_rays: 4096 # 8192
   grid_prune: true
   grid_prune_occ_thre: 0.001
   dynamic_ray_sampling: true
@@ -41,22 +41,25 @@ model:
     name: volume-sdf
     radius: ${model.radius}
     feature_dim: 13
-    grad_type: analytic
     sdf2weight: neus
     geometric_bias_remove: false # refer to D-NeuS
+    grad_type: finite_difference
     isosurface:
       method: mc
       resolution: 768
       chunk: 2097152
       threshold: 0.
     xyz_encoding_config:
-      otype: HashGrid
+      otype: ProgressiveBandHashGrid
       n_levels: 16
       n_features_per_level: 2
       log2_hashmap_size: 19
       base_resolution: 16
       per_level_scale: 1.447269237440378
       include_xyz: true
+      start_level: 4
+      start_step: 0
+      update_steps: 1000
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -95,11 +98,11 @@ system:
     lambda_eikonal: 0.1
     lambda_adaptive: 0.0
     lambda_curvature: 5e-4 # topology warmup
-    curvature_warmup_steps: 2000
+    curvature_warmup_steps: ${model.geometry.xyz_encoding_config.update_steps}
     lambda_sparsity: 0.01
     sparsity_scale: 1.
     lambda_distortion: 0.
-    lambda_entropy: 0.01
+    lambda_entropy: 0.
     lambda_opaque: 0.
     lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 2e5] # refer to D-NeuS
   optimizer:
@@ -140,10 +143,10 @@ export:
   export_vertex_color: True  
 
 trainer:
-  max_steps: 20000
+  max_steps: 2e4
   log_every_n_steps: 100
   num_sanity_val_steps: 0
-  val_check_interval: 10000
+  val_check_interval: 5e3
   limit_train_batches: 1.0
   limit_val_batches: 2
   enable_progress_bar: true 

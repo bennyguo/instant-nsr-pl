@@ -52,7 +52,7 @@ class BlenderDatasetBase():
             self.cy = meta['cy']
             self.k1 = meta['k1']
             self.k2 = meta['k2']
-            use_c3vd = True
+            c3vd_data = True
         except:
             self.focal_x = 0.5 * w / math.tan(0.5 * meta['camera_angle_x']) # scaled focal length
             self.focal_y = self.focal_x
@@ -60,7 +60,7 @@ class BlenderDatasetBase():
             self.cy = self.h//2
             self.k1 = 0.0
             self.k2 = 0.0
-            use_c3vd = False
+            c3vd_data = False
 
         # ray directions for all pixels, same for all images (same H, W, focal)
         self.directions = \
@@ -70,7 +70,7 @@ class BlenderDatasetBase():
 
         for i, frame in enumerate(meta['frames']):
             c2w = torch.from_numpy(np.array(frame['transform_matrix'])[:3, :4])
-            if use_c3vd:
+            if c3vd_data:
                 c2w[:3,1:3] *= -1. # OpenGL or COLMAP coordinates
             self.all_c2w.append(c2w)
 
@@ -79,14 +79,17 @@ class BlenderDatasetBase():
             img = img.resize(self.img_wh, Image.BICUBIC)
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
 
-            if use_c3vd and self.apply_mask:
-                depth_path = img_path.replace("images", "depths").replace("color.png", "depth.tiff")
-                depth = Image.open(depth_path).convert('L')
-                depth = depth.resize(self.img_wh, Image.BICUBIC)
-                depth = TF.to_tensor(depth).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
-                mask = torch.ones_like(img[...,0], device=img.device)
-                mask[depth[...,0] == 0] = 0.0
-                self.all_fg_masks.append(mask) # (h, w)
+            if self.apply_mask:
+                if c3vd_data:
+                    depth_path = img_path.replace("images", "depths").replace("color.png", "depth.tiff")
+                    depth = Image.open(depth_path).convert('L')
+                    depth = depth.resize(self.img_wh, Image.BICUBIC)
+                    depth = TF.to_tensor(depth).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
+                    mask = torch.ones_like(img[...,0], device=img.device)
+                    mask[depth[...,0] == 0] = 0.0
+                    self.all_fg_masks.append(mask) # (h, w)
+                else:
+                    self.all_fg_masks.append(img[..., -1]) # (h, w)
             else:
                 self.all_fg_masks.append(torch.ones_like(img[...,0], device=img.device)) # (h, w)
             self.all_images.append(img[...,:3])
