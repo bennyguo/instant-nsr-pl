@@ -9,6 +9,7 @@ dataset:
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
   n_test_traj_steps: 60
   apply_mask: false
+  max_imgs: 400
 
 model:
   name: neus
@@ -34,6 +35,7 @@ model:
     feature_dim: 13
     grad_type: analytic
     sdf2weight: neus
+    geometric_bias_remove: false # refer to D-NeuS
     isosurface:
       method: mc
       resolution: 512
@@ -56,6 +58,9 @@ model:
       sphere_init: true
       sphere_init_radius: 0.5
       weight_norm: true
+    max_imgs: ${dataset.max_imgs}
+    use_distortion: false
+    unwarp_rays: true
   texture:
     name: volume-radiance
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
@@ -104,6 +109,10 @@ model:
       n_neurons: 64
       n_hidden_layers: 2
     color_activation: sigmoid
+    max_imgs: ${dataset.max_imgs}
+    use_appearance_embedding: false
+    use_average_appearance_embedding: ture
+    appearance_embedding_dim: 8
 
 system:
   name: neus-system
@@ -118,8 +127,9 @@ system:
     sparsity_scale: 1.
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
-    lambda_opaque: 0.0
+    lambda_opaque: 1e-2
     lambda_entropy: 0.0
+    lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 2e5] # refer to D-NeuS
   optimizer:
     name: AdamW
     args:

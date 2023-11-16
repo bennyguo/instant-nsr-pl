@@ -10,7 +10,7 @@ dataset:
   #   - 800
   #   - 800
   img_downscale: 1 # specify training image size by either img_wh or img_downscale
-  cam_downscale: false
+  cam_downscale: 1 # false
   near_plane: 2.0
   far_plane: 6.0
   apply_mask: true
@@ -73,7 +73,7 @@ model:
     name: volume-radiance
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
     dir_encoding_config:
-      otype: SphericalHarmonics
+      otype: SphericalHarmonics # IntegratedDirectionalEncoder #
       degree: 4    
     mlp_network_config:
       otype: FullyFusedMLP
@@ -94,7 +94,7 @@ system:
     lambda_rgb_l1: 0.
     lambda_mask: 0.1
     lambda_eikonal: 0.1
-    lambda_adaptive: 1e-4
+    lambda_adaptive: 1e-6 # 1e-4
     lambda_curvature: 0
     lambda_sparsity: 0.01
     lambda_distortion: 1e-3 # 0.

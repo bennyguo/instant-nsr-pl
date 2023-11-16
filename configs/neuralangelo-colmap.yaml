@@ -131,10 +131,10 @@ system:
     lambda_rgb_mse: 1.
     lambda_rgb_l1: 1.
     lambda_mask: 0.0
-    lambda_eikonal: 0.1 # [0, 0.01, 0.1, 2e5] 
+    lambda_eikonal: 0.1
     lambda_adaptive: 1e-4
     lambda_curvature: 5e-4 # topology warmup
-    curvature_warmup_steps: 5000
+    curvature_warmup_steps: ${model.geometry.xyz_encoding_config.update_steps}
     lambda_sparsity: 0.0
     sparsity_scale: 1.
     lambda_distortion: 0.0

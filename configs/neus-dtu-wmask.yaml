@@ -9,6 +9,7 @@ dataset:
   img_downscale: 2 # specify training image size by either img_wh or img_downscale
   n_test_traj_steps: 60
   apply_mask: true
+  max_imgs: 400
 
 model:
   name: neus
@@ -57,6 +58,7 @@ model:
       sphere_init: true
       sphere_init_radius: 0.5
       weight_norm: true
+    max_imgs: ${dataset.max_imgs}
     use_distortion: false
     unwarp_rays: true
   texture:
@@ -72,9 +74,10 @@ model:
       n_neurons: 64
       n_hidden_layers: 2
     color_activation: sigmoid
+    max_imgs: ${dataset.max_imgs}
     use_appearance_embedding: false
     use_average_appearance_embedding: ture
-    appearance_embedding_dim: 32
+    appearance_embedding_dim: 2
 
 system:
   name: neus-system
