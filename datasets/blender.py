@@ -21,8 +21,7 @@ class BlenderDatasetBase():
         self.split = split
         self.rank = get_rank()
 
-        self.has_mask = True
-        self.apply_mask = self.has_mask and self.config.apply_mask
+        self.apply_mask = self.config.apply_mask
 
         with open(os.path.join(self.config.root_dir, f"transforms_{self.split}.json"), 'r') as f:
             meta = json.load(f)
@@ -42,42 +41,46 @@ class BlenderDatasetBase():
         
         self.w, self.h = w, h
         self.img_wh = (self.w, self.h)
+        factor = w / W
 
         self.near, self.far = self.config.near_plane, self.config.far_plane
 
         try:
-            self.focal_x = meta['fl_x']
-            self.focal_y = meta['fl_y']
-            self.cx = meta['cx']
-            self.cy = meta['cy']
+            self.focal_x = meta['fl_x'] * factor
+            self.focal_y = meta['fl_y'] * factor
+            self.cx = meta['cx'] * factor
+            self.cy = meta['cy'] * factor
+        except:
+            self.focal_x = 0.5 * w / math.tan(0.5 * meta['camera_angle_x']) * factor # scaled focal length
+            self.focal_y = self.focal_x
+            self.cx = self.w//2 * factor
+            self.cy = self.h//2 * factor
+
+        try:
             self.k1 = meta['k1']
             self.k2 = meta['k2']
             c3vd_data = True
         except:
-            self.focal_x = 0.5 * w / math.tan(0.5 * meta['camera_angle_x']) # scaled focal length
-            self.focal_y = self.focal_x
-            self.cx = self.w//2
-            self.cy = self.h//2
             self.k1 = 0.0
             self.k2 = 0.0
             c3vd_data = False
 
         # ray directions for all pixels, same for all images (same H, W, focal)
-        self.directions = \
-            get_ray_directions(self.w, self.h, self.focal_x, self.focal_y, self.cx, self.cy, k1=self.k1, k2=self.k2).to(self.rank) # (h, w, 3)           
+        self.directions = get_ray_directions(self.w, self.h, self.focal_x, self.focal_y, self.cx, self.cy, k1=self.k1, k2=self.k2).to(self.rank) if self.config.load_data_on_gpu else get_ray_directions(self.w, self.h, self.focal_x, self.focal_y, self.cx, self.cy, k1=self.k1, k2=self.k2).cpu() # (h, w, 3)
 
         self.all_c2w, self.all_images, self.all_fg_masks = [], [], []
 
         for i, frame in enumerate(meta['frames']):
             c2w = torch.from_numpy(np.array(frame['transform_matrix'])[:3, :4])
             if c3vd_data:
-                c2w[:3,1:3] *= -1. # OpenGL or COLMAP coordinates
+                c2w[:3, 1:3] *= -1. # OpenGL or COLMAP coordinates
             self.all_c2w.append(c2w)
 
             img_path = os.path.join(self.config.root_dir, f"{frame['file_path']}.png")
             img = Image.open(img_path)
             img = img.resize(self.img_wh, Image.BICUBIC)
             img = TF.to_tensor(img).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
+            img = img.to(self.rank) if self.config.load_data_on_gpu else img.cpu()
 
             if self.apply_mask:
                 if c3vd_data:
@@ -87,17 +90,25 @@ class BlenderDatasetBase():
                     depth = TF.to_tensor(depth).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
                     mask = torch.ones_like(img[...,0], device=img.device)
                     mask[depth[...,0] == 0] = 0.0
-                    self.all_fg_masks.append(mask) # (h, w)
-                else:
-                    self.all_fg_masks.append(img[..., -1]) # (h, w)
+                elif img.shape[-1] != 4:
+                    mask_path = img_path.replace("images", "masks") # .replace("color.png", "depth.tiff")
+                    mask = Image.open(mask_path).convert('L')
+                    mask = mask.resize(self.img_wh, Image.BICUBIC)
+                    mask = TF.to_tensor(mask).permute(1, 2, 0) # (4, h, w) => (h, w, 4)
+                    # self.all_fg_masks.append(mask) # (h, w)
+                elif img.shape[-1] == 4:
+                    mask = img[..., -1]
+                    # self.all_fg_masks.append(img[..., -1]) # (h, w)
+                mask = mask.to(self.rank) if self.config.load_data_on_gpu else mask.cpu()
+                self.all_fg_masks.append(mask) # (h, w)
             else:
                 self.all_fg_masks.append(torch.ones_like(img[...,0], device=img.device)) # (h, w)
             self.all_images.append(img[...,:3])
 
         self.all_c2w, self.all_images, self.all_fg_masks = \
             torch.stack(self.all_c2w, dim=0).float().to(self.rank), \
-            torch.stack(self.all_images, dim=0).float().to(self.rank), \
-            torch.stack(self.all_fg_masks, dim=0).float().to(self.rank)
+            torch.stack(self.all_images, dim=0).float(), \
+            torch.stack(self.all_fg_masks, dim=0).float()
 
         # translate
         # self.all_c2w[...,3] -= self.all_c2w[...,3].mean(0)

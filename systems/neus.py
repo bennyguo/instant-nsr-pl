@@ -119,7 +119,7 @@ class NeuSSystem(BaseSystem):
         opacity = torch.clamp(out['opacity'].squeeze(-1), 1.e-3, 1.-1.e-3)
         loss_mask = binary_cross_entropy(opacity, batch['fg_mask'].float())
         self.log('train/loss_mask', loss_mask)
-        loss += loss_mask * (self.C(self.config.system.loss.lambda_mask) if self.dataset.has_mask else 0.0)
+        loss += loss_mask * (self.C(self.config.system.loss.lambda_mask) if self.dataset.apply_mask else 0.0)
 
         loss_opaque = binary_cross_entropy(opacity, opacity)
         self.log('train/loss_opaque', loss_opaque)

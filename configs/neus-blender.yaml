@@ -14,6 +14,7 @@ dataset:
   near_plane: 2.0
   far_plane: 6.0
   apply_mask: true
+  load_data_on_gpu: false
   train_split: 'train'
   val_split: 'val'
   test_split: 'test'
@@ -22,8 +23,8 @@ dataset:
 model:
   name: neus
   radius: 1.5
-  num_samples_per_ray: 2048
-  train_num_rays: 256
+  num_samples_per_ray: 4096
+  train_num_rays: 512
   max_train_num_rays: 8192
   grid_prune: true
   grid_prune_occ_thre: 0.001
@@ -41,9 +42,9 @@ model:
     name: volume-sdf
     radius: ${model.radius}
     feature_dim: 13
-    grad_type: analytic
     sdf2weight: neus
     geometric_bias_remove: false # refer to D-NeuS
+    grad_type: analytic
     isosurface:
       method: mc
       resolution: 768
@@ -54,8 +55,8 @@ model:
       n_levels: 16
       n_features_per_level: 2
       log2_hashmap_size: 19
-      base_resolution: 16
-      per_level_scale: 1.447269237440378
+      base_resolution: 32
+      per_level_scale: 1.3195079107728942
       include_xyz: true
     mlp_network_config:
       otype: VanillaMLP
@@ -86,21 +87,20 @@ model:
     use_appearance_embedding: false
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 32
-  
 system:
   name: neus-system
   loss:
     lambda_rgb_mse: 10.
     lambda_rgb_l1: 0.
-    lambda_mask: 0.1
+    lambda_mask: 0.0
     lambda_eikonal: 0.1
-    lambda_adaptive: 1e-6 # 1e-4
+    lambda_adaptive: 1e-6
     lambda_curvature: 0
-    lambda_sparsity: 0.01
-    lambda_distortion: 1e-3 # 0.
-    lambda_entropy: 0.01
-    lambda_opaque: 0.
+    lambda_sparsity: 0.0
     sparsity_scale: 1.
+    lambda_distortion: 0.0
+    lambda_opaque: 0.0
+    lambda_entropy: 0.0
     lambda_surface_bias: 0. # refer to D-NeuS
   optimizer:
     name: Adam
@@ -140,10 +140,10 @@ export:
   export_vertex_color: True  
 
 trainer:
-  max_steps: 2e4
-  log_every_n_steps: 100
+  max_steps: 2e5
+  log_every_n_steps: 500
   num_sanity_val_steps: 0
-  val_check_interval: 5e3 # 2000
+  val_check_interval: 1e4
   limit_train_batches: 1.0
   limit_val_batches: 4
   enable_progress_bar: true 
