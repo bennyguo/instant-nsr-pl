@@ -32,6 +32,7 @@ class VolumeRadiance(nn.Module):
         # appearance embeddings
         if self.config.use_appearance_embedding:
             if self.training:
+                assert camera_indices is not None, "Camera indices should be given during training when appearance embedding is used"
                 appe_embd = self.embedding_appearance(camera_indices[ray_indices])
             elif camera_indices.nelement() > 0:
                 appe_embd = self.embedding_appearance(camera_indices).repeat(features.size()[0], 1)
@@ -71,6 +72,7 @@ class VolumeColor(nn.Module):
         # with appearance embeddings
         if self.config.use_appearance_embedding:
             if self.training:
+                assert camera_indices is not None, "Camera indices should be given during training when appearance embedding is used"
                 appe_embd = self.embedding_appearance(camera_indices[ray_indices])
             elif camera_indices.nelement() > 0:
                 appe_embd = self.embedding_appearance(camera_indices).repeat(features.size()[0], 1)

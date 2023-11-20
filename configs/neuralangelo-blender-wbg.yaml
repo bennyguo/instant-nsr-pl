@@ -1,4 +1,4 @@
-name: neus-blender-${dataset.scene}
+name: na-blender-${dataset.scene}
 tag: ''
 seed: 42
 
@@ -23,7 +23,7 @@ dataset:
 model:
   name: neus
   radius: 1.5
-  num_samples_per_ray: 2048
+  num_samples_per_ray: 4096
   train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true
@@ -44,7 +44,7 @@ model:
     feature_dim: 13
     sdf2weight: hf_neus
     geometric_bias_remove: false # refer to D-NeuS
-    grad_type: analytic
+    grad_type: finite_difference
     isosurface:
       method: mc
       resolution: 768
@@ -70,6 +70,7 @@ model:
       sphere_init: true
       sphere_init_radius: 0.5
       weight_norm: true
+    finite_difference_eps: progressive
     max_imgs: ${dataset.max_imgs}
     use_appearance_embedding: false
     use_average_appearance_embedding: ture
@@ -80,10 +81,10 @@ model:
     name: volume-radiance
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
     dir_encoding_config:
-      otype: SphericalHarmonics # IntegratedDirectionalEncoder #
+      otype: SphericalHarmonics
       degree: 4    
     mlp_network_config:
-      otype: VanillaMLP
+      otype: VanillaMLP # FullyFusedMLP
       activation: ReLU
       output_activation: none
       n_neurons: 64
@@ -132,6 +133,7 @@ model:
     use_appearance_embedding: true
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 8
+  
 system:
   name: neus-system
   loss:
@@ -140,14 +142,15 @@ system:
     lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_adaptive: 1e-6
-    lambda_curvature: 0
+    lambda_curvature: 0.0 # 5e-4 # topology warmup
+    curvature_warmup_steps: ${model.geometry.xyz_encoding_config.update_steps}
     lambda_sparsity: 0.0
     sparsity_scale: 1.
     lambda_distortion: 1e-4
     lambda_distortion_bg: 0.0
     lambda_opaque: 1e-2
     lambda_entropy: 1e-4
-    lambda_surface_bias: 0.0 # refer to D-NeuS
+    lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 2e5] # refer to D-NeuS
   optimizer:
     name: AdamW
     args:

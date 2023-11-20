@@ -50,6 +50,12 @@ model:
       output_activation: none
       n_neurons: 64
       n_hidden_layers: 1
+    max_imgs: ${dataset.max_imgs}
+    use_appearance_embedding: false
+    use_average_appearance_embedding: ture
+    appearance_embedding_dim: 16
+    use_distortion: false
+    unwarp_rays: true
   texture:
     name: volume-radiance
     input_feature_dim: ${model.geometry.feature_dim}

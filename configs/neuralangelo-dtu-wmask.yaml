@@ -62,6 +62,10 @@ model:
       sphere_init: true
       sphere_init_radius: 0.5
       weight_norm: true
+    max_imgs: ${dataset.max_imgs}
+    use_appearance_embedding: false
+    use_average_appearance_embedding: ture
+    appearance_embedding_dim: 16
     use_distortion: false
     unwarp_rays: true
   texture:

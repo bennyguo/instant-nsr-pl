@@ -250,7 +250,7 @@ class NeuSModel(BaseModel):
         if self.config.geometry.grad_type == 'finite_difference':
             sdf, sdf_grad, feature, sdf_laplace = self.geometry(positions, with_grad=True, with_feature=True, with_laplace=True, camera_indices=camera_indices, ray_indices=ray_indices)
         else:
-            sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True)
+            sdf, sdf_grad, feature = self.geometry(positions, with_grad=True, with_feature=True, camera_indices=camera_indices, ray_indices=ray_indices)
         normal = F.normalize(sdf_grad, p=2, dim=-1)
         alpha = self.get_alpha(sdf, normal, t_dirs, dists)[...,None]
         rgb = self.texture(feature, t_dirs, camera_indices.to(self.rank), ray_indices, normal)

@@ -1,29 +1,27 @@
-name: neus-blender-${dataset.scene}
-tag: ''
+name: neus-hmvs-${basename:${dataset.root_dir}}
+tag: ""
 seed: 42
 
 dataset:
-  name: blender
-  scene: ???
-  root_dir: ./load/nerf_synthetic/${dataset.scene}
-  # img_wh:
-  #   - 800
-  #   - 800
-  img_downscale: 1 # specify training image size by either img_wh or img_downscale
-  cam_downscale: 1 # false
-  near_plane: 2.0
-  far_plane: 6.0
+  name: hmvs
+  root_dir: /home/yidaw/Documents/datasets/Buildings
+  pose_path: /home/yidaw/Documents/datasets/Buildings/Building/Tile_+002_+002_AT.bin
+  pcd_path: /home/yidaw/Documents/datasets/Buildings/Building/building_interest.ply # Bridge/Tile_+004_+008_AT.ply
+  mesh_exported_path: false
+  img_downscale: 2 # 4 # better with more than 1000 x 1000 resolution
+  cam_downscale: 200 # if false, to rescale the cameras/pts positions automatically
+  repose: true # false
+  up_est_method: camera # z-axis # camera/ground/z-axis 
+  center_est_method: point # camera/point
+  n_test_traj_steps: 4
   apply_mask: false
   load_data_on_gpu: false
-  train_split: 'train'
-  val_split: 'val'
-  test_split: 'test'
-  max_imgs: 1500
+  max_imgs: 500
 
 model:
   name: neus
-  radius: 1.5
-  num_samples_per_ray: 2048
+  radius: 1.0
+  num_samples_per_ray: 4096
   train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true
@@ -47,8 +45,8 @@ model:
     grad_type: analytic
     isosurface:
       method: mc
-      resolution: 768
-      chunk: 2097152
+      resolution: 768 # 1536
+      chunk: 2097152 # 128**3
       threshold: 0.
     xyz_encoding_config:
       otype: ProgressiveBandHashGrid
@@ -80,8 +78,8 @@ model:
     name: volume-radiance
     input_feature_dim: ${add:${model.geometry.feature_dim},3} # surface normal as additional input
     dir_encoding_config:
-      otype: SphericalHarmonics # IntegratedDirectionalEncoder #
-      degree: 4    
+      otype: SphericalHarmonics
+      degree: 4
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -132,22 +130,23 @@ model:
     use_appearance_embedding: true
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 8
+
 system:
   name: neus-system
   loss:
     lambda_rgb_mse: 1. # 10.
-    lambda_rgb_l1: 1. # 0.
+    lambda_rgb_l1: 1.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
     lambda_adaptive: 1e-6
-    lambda_curvature: 0
+    lambda_curvature: 0 # topology warmup
     lambda_sparsity: 0.0
-    sparsity_scale: 1.
     lambda_distortion: 1e-4
     lambda_distortion_bg: 0.0
     lambda_opaque: 1e-2
+    sparsity_scale: 1.
     lambda_entropy: 1e-4
-    lambda_surface_bias: 0.0 # refer to D-NeuS
+    lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 1e5] # refer to D-NeuS
   optimizer:
     name: AdamW
     args:
@@ -156,15 +155,15 @@ system:
       eps: 1.e-15
     params:
       geometry:
-          lr: 0.01
+        lr: 0.01
       texture:
-          lr: 0.01
+        lr: 0.01
       geometry_bg:
         lr: 0.01
       texture_bg:
         lr: 0.01
       variance:
-          lr: 0.001
+        lr: 0.001
   warmup_steps: 500
   scheduler:
     name: SequentialLR
@@ -187,14 +186,14 @@ checkpoint:
 
 export:
   chunk_size: 2097152
-  export_vertex_color: True  
+  export_vertex_color: True
 
 trainer:
   max_steps: 1e5
   log_every_n_steps: 500
   num_sanity_val_steps: 0
-  val_check_interval: 5e3
+  val_check_interval: 1e5
   limit_train_batches: 1.0
-  limit_val_batches: 4
-  enable_progress_bar: true 
+  limit_val_batches: 2
+  enable_progress_bar: true
   precision: 16

@@ -59,11 +59,11 @@ class BlenderDatasetBase():
         try:
             self.k1 = meta['k1']
             self.k2 = meta['k2']
-            c3vd_data = True
+            with_distort = True
         except:
             self.k1 = 0.0
             self.k2 = 0.0
-            c3vd_data = False
+            with_distort = False
 
         # ray directions for all pixels, same for all images (same H, W, focal)
         self.directions = get_ray_directions(self.w, self.h, self.focal_x, self.focal_y, self.cx, self.cy, k1=self.k1, k2=self.k2).to(self.rank) if self.config.load_data_on_gpu else get_ray_directions(self.w, self.h, self.focal_x, self.focal_y, self.cx, self.cy, k1=self.k1, k2=self.k2).cpu() # (h, w, 3)
@@ -72,7 +72,8 @@ class BlenderDatasetBase():
 
         for i, frame in enumerate(meta['frames']):
             c2w = torch.from_numpy(np.array(frame['transform_matrix'])[:3, :4])
-            if c3vd_data:
+            if with_distort:
+                # NOTE: c3vd data is presented in colmap coordinate 
                 c2w[:3, 1:3] *= -1. # OpenGL or COLMAP coordinates
             self.all_c2w.append(c2w)
 
@@ -83,7 +84,8 @@ class BlenderDatasetBase():
             img = img.to(self.rank) if self.config.load_data_on_gpu else img.cpu()
 
             if self.apply_mask:
-                if c3vd_data:
+                if with_distort:
+                    # NOTE: c3vd data supplement mask from depth images
                     depth_path = img_path.replace("images", "depths").replace("color.png", "depth.tiff")
                     depth = Image.open(depth_path).convert('L')
                     depth = depth.resize(self.img_wh, Image.BICUBIC)
