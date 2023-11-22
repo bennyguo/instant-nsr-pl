@@ -18,7 +18,7 @@ model:
   name: neus
   radius: 1.0
   num_samples_per_ray: 4096 # fewer than 1024 fails to learn SDF, although rendering is fine
-  train_num_rays: 512
+  train_num_rays: 256
   max_train_num_rays: 8192
   grid_prune: true
   grid_prune_occ_thre: 0.001
@@ -36,7 +36,7 @@ model:
     name: volume-sdf
     radius: ${model.radius}
     feature_dim: 13
-    sdf2weight: neus
+    sdf2weight: hf_neus
     geometric_bias_remove: false # refer to D-NeuS
     grad_type: analytic
     isosurface:
@@ -47,14 +47,14 @@ model:
     xyz_encoding_config:
       otype: ProgressiveBandHashGrid
       n_levels: 16
-      n_features_per_level: 2
-      log2_hashmap_size: 19
+      n_features_per_level: 8
+      log2_hashmap_size: 22
       base_resolution: 32
       per_level_scale: 1.3195079107728942
       include_xyz: true
       start_level: 4
       start_step: 0
-      update_steps: 1000
+      update_steps: 2000
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU
@@ -84,7 +84,7 @@ model:
       n_hidden_layers: 2
     color_activation: sigmoid
     max_imgs: ${dataset.max_imgs}
-    use_appearance_embedding: false
+    use_appearance_embedding: true
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 16
   # background model configurations
@@ -123,25 +123,25 @@ model:
       n_hidden_layers: 2
     color_activation: sigmoid
     max_imgs: ${dataset.max_imgs}
-    use_appearance_embedding: false
+    use_appearance_embedding: true
     use_average_appearance_embedding: ture
     appearance_embedding_dim: 8
 
 system:
   name: neus-system
   loss:
-    lambda_rgb_mse: 10.
-    lambda_rgb_l1: 0.
+    lambda_rgb_mse: 1.
+    lambda_rgb_l1: 1.
     lambda_mask: 0.0
     lambda_eikonal: 0.1
-    lambda_adaptive: 1e-4
+    lambda_adaptive: 1e-6
     lambda_curvature: 0
     lambda_sparsity: 0.0
-    lambda_distortion: 0.0
-    lambda_distortion_bg: 0.0
-    lambda_opaque: 0.0
     sparsity_scale: 1.
-    lambda_entropy: 0.0
+    lambda_distortion: 1e-4
+    lambda_distortion_bg: 0.0
+    lambda_opaque: 1e-2
+    lambda_entropy: 1e-4
     lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 2e5] # refer to D-NeuS
   optimizer:
     name: AdamW
@@ -185,7 +185,7 @@ export:
   export_vertex_color: True
 
 trainer:
-  max_steps: 2e5
+  max_steps: 1e5
   log_every_n_steps: 500
   num_sanity_val_steps: 0
   val_check_interval: 1e5

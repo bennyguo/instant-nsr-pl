@@ -143,10 +143,10 @@ system:
     lambda_curvature: 5e-4 # topology warmup
     curvature_warmup_steps: ${model.geometry.xyz_encoding_config.update_steps}
     lambda_sparsity: 0.0
+    sparsity_scale: 1.
     lambda_distortion: 0.0
     lambda_distortion_bg: 0.0
     lambda_opaque: 1e-2 # 0.0
-    sparsity_scale: 1.
     lambda_entropy: 0.0
     lambda_surface_bias: 0. # refer to D-NeuS
   optimizer:

@@ -1,4 +1,4 @@
-name: neus-hmvs-${basename:${dataset.root_dir}}
+name: na-hmvs-${basename:${dataset.root_dir}}
 tag: ""
 seed: 42
 
@@ -58,7 +58,7 @@ model:
       include_xyz: true
       start_level: 4
       start_step: 0
-      update_steps: 2000 # 5000 # Don't set it larger then 2000, otherwise smoothness will be harmed, refer to NeuS2
+      update_steps: 2000 # Don't set it larger then 2000, otherwise smoothness will be harmed, refer to NeuS2
     mlp_network_config:
       otype: VanillaMLP
       activation: ReLU

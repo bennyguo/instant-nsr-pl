@@ -141,10 +141,10 @@ system:
     lambda_adaptive: 1e-6
     lambda_curvature: 0 # topology warmup
     lambda_sparsity: 0.0
+    sparsity_scale: 1.
     lambda_distortion: 1e-4
     lambda_distortion_bg: 0.0
     lambda_opaque: 1e-2
-    sparsity_scale: 1.
     lambda_entropy: 1e-4
     lambda_surface_bias: 0.0 # [5e3, 0.0, 0.1, 1e5] # refer to D-NeuS
   optimizer:

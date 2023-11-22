@@ -235,7 +235,7 @@ class VolumeSDF(BaseImplicitGeometry):
                             if self.training and camera_indices is not None:
                                 appe_embd = self.embedding_appearance(camera_indices[ray_indices]).repeat_interleave(offsets.shape[0], dim=0)
                             elif camera_indices is not None and camera_indices.nelement() > 0:
-                                appe_embd = self.embedding_appearance(camera_indices).repeat(pts_embd_d.size()[0], 1)
+                                appe_embd = self.embedding_appearance(camera_indices.to(self.rank)).repeat(pts_embd_d.size()[0], 1)
                             else:
                                 appe_embd = self.embedding_appearance.mean(dim=0).repeat(pts_embd_d.size()[0], 1)
                                 if not self.config.use_average_appearance_embedding:
@@ -263,7 +263,17 @@ class VolumeSDF(BaseImplicitGeometry):
 
     def forward_level(self, points):
         points = contract_to_unisphere(points, self.radius, self.contraction_type) # points normalized to (0, 1)
-        sdf = self.network(self.encoding(points.view(-1, 3))).view(*points.shape[:-1], self.n_output_dims)[...,0]
+        pts_embd = self.encoding(points.view(-1, 3))
+        # appearance embeddings
+        if self.config.use_appearance_embedding:
+            with torch.no_grad():
+                appe_embd = self.embedding_appearance.mean(dim=0).repeat(pts_embd.size()[0], 1)
+                if not self.config.use_average_appearance_embedding:
+                    appe_embd *= 0
+            network_inp = torch.cat([pts_embd.view(-1, pts_embd.shape[-1]), appe_embd], dim=-1)
+        else:
+            network_inp = pts_embd
+        sdf = self.network(network_inp).view(*points.shape[:-1], self.n_output_dims)[...,0]
         if 'sdf_activation' in self.config:
             sdf = get_activation(self.config.sdf_activation)(sdf + float(self.config.sdf_bias))
         return sdf
